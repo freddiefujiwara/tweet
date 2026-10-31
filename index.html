@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tweet — Xに投稿</title>
+<style>
+  body { font-family: sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+  textarea { width: 100%; box-sizing: border-box; font-size: 1rem; padding: .5rem; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin: .5rem 0; }
+  button { font-size: 1rem; padding: .5rem 1.5rem; }
+  button:disabled { opacity: .5; }
+  #status { white-space: pre-wrap; margin-top: 1rem; }
+  #signin { margin: 1rem 0; }
+  .error { color: #b00020; }
+</style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="config.js"></script>
+</head>
+<body>
+<h1>Xに投稿</h1>
+
+<div id="signin"></div>
+<p id="account"></p>
+
+<textarea id="text" rows="5" placeholder="投稿する文面" disabled></textarea>
+<div class="row">
+  <span><span id="count">0</span> / 280</span>
+  <button id="post" disabled>投稿する</button>
+</div>
+<div id="status"></div>
+
+<script>
+const ALLOWED_EMAIL = 'zegenvs@gmail.com';
+let idToken = null;
+
+const textEl = document.getElementById('text');
+const postBtn = document.getElementById('post');
+const countEl = document.getElementById('count');
+const statusEl = document.getElementById('status');
+const accountEl = document.getElementById('account');
+
+function decodeJwtPayload(token) {
+  const part = token.split('.')[1];
+  const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+  const json = decodeURIComponent(
+    atob(base64).split('').map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+  );
+  return JSON.parse(json);
+}
+
+function refreshState() {
+  const len = [...textEl.value].length;
+  countEl.textContent = len;
+  postBtn.disabled = !(idToken && len > 0 && len <= 280);
+}
+
+textEl.addEventListener('input', refreshState);
+
+function onCredential(response) {
+  const payload = decodeJwtPayload(response.credential);
+  if (payload.email !== ALLOWED_EMAIL) {
+    statusEl.innerHTML = '<span class="error">このアカウントでは投稿できません：' + payload.email + '</span>';
+    idToken = null;
+    textEl.disabled = true;
+    refreshState();
+    return;
+  }
+  idToken = response.credential;
+  accountEl.textContent = 'ログイン中：' + payload.email;
+  statusEl.textContent = '';
+  textEl.disabled = false;
+  refreshState();
+}
+
+window.addEventListener('load', () => {
+  google.accounts.id.initialize({
+    client_id: CONFIG.GOOGLE_CLIENT_ID,
+    callback: onCredential,
+  });
+  google.accounts.id.renderButton(document.getElementById('signin'), {
+    theme: 'outline',
+    size: 'large',
+    text: 'signin_with',
+  });
+});
+
+postBtn.addEventListener('click', async () => {
+  postBtn.disabled = true;
+  statusEl.textContent = '投稿しています…';
+  try {
+    const res = await fetch(CONFIG.GAS_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ idToken, text: textEl.value }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      let msg = '投稿しました：\n' + data.url;
+      if (data.verifiedText != null) {
+        msg += '\n確認済みの本文：' + data.verifiedText;
+      } else {
+        msg += '\n（投稿の確認リクエストは失敗しました。リンク先でご確認ください）';
+      }
+      statusEl.innerHTML = '';
+      const a = document.createElement('a');
+      a.href = data.url;
+      a.textContent = data.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      statusEl.append('投稿しました：\n', a, '\n' + (data.verifiedText != null
+        ? '確認済みの本文：' + data.verifiedText
+        : '（投稿の確認リクエストは失敗しました。リンク先でご確認ください）'));
+      textEl.value = '';
+      refreshState();
+    } else {
+      statusEl.innerHTML = '<span class="error">失敗しました：' + data.error + '</span>';
+      postBtn.disabled = false;
+    }
+  } catch (err) {
+    statusEl.innerHTML = '<span class="error">通信に失敗しました：' + err + '</span>';
+    postBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
