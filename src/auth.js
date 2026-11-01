@@ -1,6 +1,7 @@
 // Decode the payload of a Google ID token (JWT) without verifying the
-// signature. Verification happens server-side in tweet-gas; this is
-// only used to read the signed-in account's email for display.
+// signature. Verification and authorization happen server-side in
+// tweet-gas; this is only used to read the signed-in account's email
+// for display.
 export function decodeJwtPayload(token) {
   const part = token.split(".")[1];
   const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
@@ -11,8 +12,4 @@ export function decodeJwtPayload(token) {
       .join(""),
   );
   return JSON.parse(json);
-}
-
-export function isAllowedEmail(email, allowedEmail) {
-  return email === allowedEmail;
 }

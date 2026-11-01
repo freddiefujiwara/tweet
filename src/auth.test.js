@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decodeJwtPayload, isAllowedEmail } from "./auth.js";
+import { decodeJwtPayload } from "./auth.js";
 
 function makeToken(payload) {
   const b64 = (obj) =>
@@ -22,16 +22,3 @@ describe("decodeJwtPayload", () => {
   });
 });
 
-describe("isAllowedEmail", () => {
-  it("accepts the exact allowed address", () => {
-    expect(isAllowedEmail("me@example.com", "me@example.com")).toBe(true);
-  });
-
-  it("rejects a different address", () => {
-    expect(isAllowedEmail("other@example.com", "me@example.com")).toBe(false);
-  });
-
-  it("rejects a missing email", () => {
-    expect(isAllowedEmail(undefined, "me@example.com")).toBe(false);
-  });
-});

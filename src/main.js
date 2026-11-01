@@ -1,12 +1,11 @@
 import "./style.css";
-import { CONFIG, ALLOWED_EMAIL } from "./config.js";
-import { decodeJwtPayload, isAllowedEmail } from "./auth.js";
+import { CONFIG } from "./config.js";
+import { decodeJwtPayload } from "./auth.js";
 import { THEME_KEY, resolveTheme, nextTheme, applyTheme } from "./theme.js";
 import { countText, canPost } from "./composer.js";
 import { postTweet } from "./post.js";
 
 const gateEl = document.getElementById("gate");
-const gateErrorEl = document.getElementById("gate-error");
 const composerEl = document.getElementById("composer");
 const textEl = document.getElementById("text");
 const postBtn = document.getElementById("post");
@@ -51,15 +50,9 @@ function showGate() {
 }
 
 function onCredential(response) {
+  // No client-side authorization gate: tweet-gas verifies the token
+  // and the account, and rejects unauthorized posts server-side.
   const payload = decodeJwtPayload(response.credential);
-  if (!isAllowedEmail(payload.email, ALLOWED_EMAIL)) {
-    gateErrorEl.textContent =
-      "このアカウントでは投稿できません：" + payload.email;
-    idToken = null;
-    showGate();
-    return;
-  }
-  gateErrorEl.textContent = "";
   idToken = response.credential;
   showComposer(payload.email);
 }
