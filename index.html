@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Xに投稿</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Xに投稿" />
+    <meta property="og:description" content="X（@freddiefujiwara）への投稿ページ" />
+    
+  <meta property="og:url" content="https://freddiefujiwara.com/tweet/" />
+        <meta property="og:image" content="https://freddiefujiwara.com/tweet/ogp.png" />
+        <meta name="twitter:image" content="https://freddiefujiwara.com/tweet/ogp.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Xに投稿" />
+    <meta name="twitter:description" content="X（@freddiefujiwara）への投稿ページ" />
+    <link rel="icon"
+  href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23000'/%3E%3Ctext x='32' y='42' font-size='34' text-anchor='middle' fill='white' font-family='system-ui'%3EF%3C/text%3E%3C/svg%3E">
+    <style>
+      :root {
+        font-family: Inter, "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif;
+        line-height: 1.5;
+
+        --bg: #0b1120;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --surface: #111827;
+        --surface-elevated: #1f2937;
+        --border: #334155;
+        --primary: #3b82f6;
+        --link: #93c5fd;
+        --link-active: #ffffff;
+        --error: #fca5a5;
+      }
+
+      :root[data-theme="light"] {
+        --bg: #f8fafc;
+        --text: #1f2937;
+        --muted: #64748b;
+        --surface: #ffffff;
+        --surface-elevated: #f8fafc;
+        --border: #e2e8f0;
+        --primary: #2563eb;
+        --link: #1d4ed8;
+        --link-active: #0f172a;
+        --error: #b91c1c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        transition: background-color 0.3s, color 0.3s;
+      }
+
+      .layout {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .header h1 {
+        margin: 0;
+        font-size: clamp(1.25rem, 2.8vw, 1.75rem);
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .header-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .theme-toggle {
+        border: 1px solid var(--border);
+        background: var(--surface-elevated);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font: inherit;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .theme-toggle:hover {
+        border-color: var(--primary);
+      }
+
+      .table-wrap {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 16px;
+        overflow-x: auto;
+      }
+
+      .section-title {
+        margin: 0 0 8px;
+      }
+
+      .meta {
+        color: var(--muted);
+      }
+
+      .error {
+        color: var(--error);
+      }
+
+      .auth-gate {
+        padding: 20px;
+      }
+
+      .google-login-button {
+        margin: 16px 0 8px;
+      }
+
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        font: inherit;
+        color: var(--text);
+        background: var(--surface-elevated);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+      }
+
+      textarea:focus {
+        outline: none;
+        border-color: var(--primary);
+      }
+
+      textarea:disabled {
+        opacity: 0.5;
+      }
+
+      .composer-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 12px;
+      }
+
+      .post-button {
+        border: 1px solid var(--primary);
+        background: var(--primary);
+        color: #ffffff;
+        border-radius: 999px;
+        padding: 6px 20px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+      }
+
+      .post-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      #status {
+        white-space: pre-wrap;
+        margin-top: 12px;
+      }
+
+      #status a {
+        color: var(--link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      @media (max-width: 700px) {
+        .layout {
+          padding: 12px;
+        }
+
+        .header {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .header-actions {
+          justify-content: space-between;
+          flex-wrap: wrap;
+        }
+
+        .header-buttons {
+          width: 100%;
+          justify-content: flex-start;
+        }
+
+        .theme-toggle {
+          width: fit-content;
+        }
+      }
+    </style>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="config.js"></script>
+  </head>
+  <body>
+    <div class="layout">
+      <header class="header">
+        <h1>Xに投稿</h1>
+        <div class="header-actions">
+          <div class="header-buttons">
+            <button id="theme-toggle" class="theme-toggle" type="button">ライト</button>
+            <button id="logout" class="theme-toggle" type="button" hidden>ログアウト</button>
+          </div>
+        </div>
+      </header>
+      <main>
+        <section id="gate" class="table-wrap auth-gate">
+          <h2 class="section-title">Googleログインが必要です</h2>
+          <p class="meta">許可されたアカウントでサインインしてください。</p>
+          <div id="signin" class="google-login-button"></div>
+          <p id="gate-error" class="error"></p>
+        </section>
+        <section id="composer" class="table-wrap" hidden>
+          <p id="account" class="meta"></p>
+          <textarea id="text" rows="5" placeholder="投稿する文面"></textarea>
+          <div class="composer-row">
+            <span class="meta"><span id="count">0</span> / 280</span>
+            <button id="post" class="post-button" type="button" disabled>投稿する</button>
+          </div>
+          <div id="status"></div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const ALLOWED_EMAIL = 'zegenvs@gmail.com';
+      const THEME_KEY = 'tweet-theme';
+      let idToken = null;
+
+      const gateEl = document.getElementById('gate');
+      const gateErrorEl = document.getElementById('gate-error');
+      const composerEl = document.getElementById('composer');
+      const textEl = document.getElementById('text');
+      const postBtn = document.getElementById('post');
+      const countEl = document.getElementById('count');
+      const statusEl = document.getElementById('status');
+      const accountEl = document.getElementById('account');
+      const logoutBtn = document.getElementById('logout');
+      const themeBtn = document.getElementById('theme-toggle');
+
+      // Theme: same behavior as the health site (dark by default,
+      // data-theme="light" on <html>, label shows the target theme).
+      function applyTheme(theme) {
+        if (theme === 'light') {
+          document.documentElement.setAttribute('data-theme', 'light');
+        } else {
+          document.documentElement.removeAttribute('data-theme');
+        }
+        themeBtn.textContent = theme === 'light' ? 'ダーク' : 'ライト';
+      }
+
+      let theme = localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+      applyTheme(theme);
+
+      themeBtn.addEventListener('click', () => {
+        theme = theme === 'light' ? 'dark' : 'light';
+        localStorage.setItem(THEME_KEY, theme);
+        applyTheme(theme);
+      });
+
+      function decodeJwtPayload(token) {
+        const part = token.split('.')[1];
+        const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+        const json = decodeURIComponent(
+          atob(base64).split('').map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+        );
+        return JSON.parse(json);
+      }
+
+      function refreshState() {
+        const len = [...textEl.value].length;
+        countEl.textContent = len;
+        postBtn.disabled = !(idToken && len > 0 && len <= 280);
+      }
+
+      textEl.addEventListener('input', refreshState);
+
+      function showComposer(email) {
+        gateEl.hidden = true;
+        composerEl.hidden = false;
+        logoutBtn.hidden = false;
+        accountEl.textContent = 'ログイン中：' + email;
+        refreshState();
+      }
+
+      function showGate() {
+        gateEl.hidden = false;
+        composerEl.hidden = true;
+        logoutBtn.hidden = true;
+      }
+
+      function onCredential(response) {
+        const payload = decodeJwtPayload(response.credential);
+        if (payload.email !== ALLOWED_EMAIL) {
+          gateErrorEl.textContent =
+            'このアカウントでは投稿できません：' + payload.email;
+          idToken = null;
+          showGate();
+          return;
+        }
+        gateErrorEl.textContent = '';
+        idToken = response.credential;
+        showComposer(payload.email);
+      }
+
+      logoutBtn.addEventListener('click', () => {
+        idToken = null;
+        if (window.google) {
+          google.accounts.id.disableAutoSelect();
+        }
+        showGate();
+      });
+
+      window.addEventListener('load', () => {
+        google.accounts.id.initialize({
+          client_id: CONFIG.GOOGLE_CLIENT_ID,
+          callback: onCredential,
+        });
+        google.accounts.id.renderButton(document.getElementById('signin'), {
+          theme: 'outline',
+          size: 'large',
+          text: 'signin_with',
+        });
+      });
+
+      postBtn.addEventListener('click', async () => {
+        postBtn.disabled = true;
+        statusEl.textContent = '投稿しています…';
+        try {
+          const res = await fetch(CONFIG.GAS_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ idToken, text: textEl.value }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            statusEl.innerHTML = '';
+            const a = document.createElement('a');
+            a.href = data.url;
+            a.textContent = data.url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            statusEl.append('投稿しました：\n', a, '\n' + (data.verifiedText != null
+              ? '確認済みの本文：' + data.verifiedText
+              : '（投稿の確認リクエストは失敗しました。リンク先でご確認ください）'));
+            textEl.value = '';
+            refreshState();
+          } else {
+            statusEl.innerHTML = '';
+            const span = document.createElement('span');
+            span.className = 'error';
+            span.textContent = '失敗しました：' + data.error;
+            statusEl.append(span);
+            postBtn.disabled = false;
+          }
+        } catch (err) {
+          statusEl.innerHTML = '';
+          const span = document.createElement('span');
+          span.className = 'error';
+          span.textContent = '通信に失敗しました：' + err;
+          statusEl.append(span);
+          postBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
