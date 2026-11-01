@@ -1,11 +1,36 @@
-// Send the post text to the tweet-gas endpoint with the Google ID
-// token. Returns the parsed JSON response ({ ok, url, ... } or
-// { ok: false, error }). Throws on network/parse failure.
-export async function postTweet(endpoint, idToken, text, fetchImpl = fetch) {
+// Requests to the tweet-gas endpoint. All calls are POSTs with a
+// JSON body sent as text/plain (the GAS-friendly transport this app
+// has always used). Each function returns the parsed JSON response
+// ({ ok, ... } or { ok: false, error }) and throws on network/parse
+// failure.
+async function sendJson(endpoint, payload, fetchImpl) {
   const res = await fetchImpl(endpoint, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ idToken, text }),
+    body: JSON.stringify(payload),
   });
   return res.json();
+}
+
+// Post with the owner's Google ID token.
+export async function postTweet(endpoint, idToken, text, fetchImpl = fetch) {
+  return sendJson(endpoint, { idToken, text }, fetchImpl);
+}
+
+// Post with a share link token instead of signing in. A share link is
+// owner-equivalent: the post is made as the owner.
+export async function postTweetWithShare(endpoint, shareToken, text, fetchImpl = fetch) {
+  return sendJson(endpoint, { share_token: shareToken, text }, fetchImpl);
+}
+
+// Check a share link before composing: resolves to { ok: true,
+// _share: { expires_at } } for a live link, { ok: false } otherwise.
+export async function validateShareToken(endpoint, shareToken, fetchImpl = fetch) {
+  return sendJson(endpoint, { share_token: shareToken, action: "validate_share" }, fetchImpl);
+}
+
+// Owner-only share administration: action is "issue_share" or
+// "revoke_share"; requires the owner's Google ID token.
+export async function shareAction(endpoint, idToken, action, fetchImpl = fetch) {
+  return sendJson(endpoint, { idToken, action }, fetchImpl);
 }
