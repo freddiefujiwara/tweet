@@ -173,6 +173,24 @@ textarea:disabled {
   margin-top: 12px;
 }
 
+.share-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.share-url-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
 #status a {
   color: var(--link);
   text-decoration: underline;
