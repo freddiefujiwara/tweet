@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { THEME_KEY, resolveTheme, nextTheme, applyTheme } from "./theme.js";
+import { THEME_KEY, resolveTheme, nextTheme, applyTheme } from "../src/theme.js";
 
 describe("resolveTheme", () => {
   it("returns light only for the stored value 'light'", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { postTweet } from "./post.js";
+import { postTweet } from "../src/post.js";
 
 function stubFetch(json) {
   return vi.fn(async () => ({ json: async () => json }));

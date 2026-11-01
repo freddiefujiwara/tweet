@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MAX_LENGTH, countText, canPost } from "./composer.js";
+import { MAX_LENGTH, countText, canPost } from "../src/composer.js";
 
 describe("countText", () => {
   it("counts ASCII and Japanese characters", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decodeJwtPayload } from "./auth.js";
+import { decodeJwtPayload } from "../src/auth.js";
 
 function makeToken(payload) {
   const b64 = (obj) =>
