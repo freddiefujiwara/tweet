@@ -3,6 +3,7 @@ name: Deploy Staging Preview
 on:
   push:
     branches-ignore: [ "main" ]
+  workflow_dispatch:
 
 permissions:
   contents: write
