@@ -25,6 +25,15 @@ jobs:
     - run: npm test
     - run: npm run build
 
+    - name: Build staging variant into dist/staging
+      env:
+        VITE_GAS_ENDPOINT: "https://script.google.com/macros/s/AKfycbzzDOks_JT7YtfWufq15ERqQHqd1144s23YNa0-ZsFPnjOwAn_v_-m0kRVqAlKsGcKNug/exec"
+        VITE_STAGING: "1"
+      run: |
+        npm run build:staging
+        mkdir -p dist/staging
+        cp -r dist-staging/* dist/staging/
+
     - name: Generate OGP Image from GAS JSON
       if: github.event_name == 'push'
       run: |
