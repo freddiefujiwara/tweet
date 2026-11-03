@@ -11,6 +11,11 @@ import {
   formatShareRemaining,
   formatShareExpiry,
 } from "./share.js";
+import { isStagingBuild, showStagingBanner } from "./staging-banner.js";
+
+if (isStagingBuild()) {
+  showStagingBanner();
+}
 
 const gateEl = document.getElementById("gate");
 const composerEl = document.getElementById("composer");
