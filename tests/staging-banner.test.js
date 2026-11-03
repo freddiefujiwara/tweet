@@ -18,4 +18,19 @@ describe("showStagingBanner", () => {
     expect(el.textContent).toContain("STAGING");
     expect(el.textContent).toContain("ステージング環境");
   });
+
+  it("links to every staging environment", () => {
+    document.body.innerHTML = "<main id=\"app\"></main>";
+    const el = showStagingBanner();
+    const hrefs = [...el.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual([
+      "/staging/",
+      "/blog/staging/",
+      "/list-of-stuff/staging/",
+      "/tweet/staging/",
+      "/alarm/staging/",
+      "/health/staging/",
+      "/asset/staging/",
+    ]);
+  });
 });
