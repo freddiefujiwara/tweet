@@ -3,7 +3,17 @@ import { CONFIG } from "./config.js";
 import { decodeJwtPayload } from "./auth.js";
 import { THEME_KEY, resolveTheme, nextTheme, applyTheme } from "./theme.js";
 import { countText, canPost } from "./composer.js";
-import { postTweet, postTweetWithShare, validateShareToken, shareAction } from "./post.js";
+import {
+  postTweet,
+  postTweetWithShare,
+  validateShareToken,
+  shareAction,
+  listComments,
+  listCommentsWithShare,
+  replyComment,
+  replyCommentWithShare,
+} from "./post.js";
+import { normalizeComments, inboxNotes, canReply } from "./comments.js";
 import {
   parseShareToken,
   buildShareUrl,
@@ -38,6 +48,12 @@ const shareUrlEl = document.getElementById("share-url");
 const shareRemainingEl = document.getElementById("share-remaining");
 const shareExpiresEl = document.getElementById("share-expires");
 const shareStatusEl = document.getElementById("share-status");
+const inboxEl = document.getElementById("inbox");
+const inboxRefreshBtn = document.getElementById("inbox-refresh");
+const inboxNoteEl = document.getElementById("inbox-note");
+const inboxStatusEl = document.getElementById("inbox-status");
+const inboxListEl = document.getElementById("inbox-list");
+const inboxEmptyEl = document.getElementById("inbox-empty");
 
 let idToken = null;
 // Set when the page was opened via a temporary access link (#share=…).
@@ -67,15 +83,18 @@ function showComposer(email) {
   expiredEl.hidden = true;
   composerEl.hidden = false;
   shareCardEl.hidden = false;
+  inboxEl.hidden = false;
   logoutBtn.hidden = false;
   accountEl.textContent = "ログイン中：" + email;
   refreshState();
+  loadComments();
 }
 
 function showGate() {
   gateEl.hidden = false;
   composerEl.hidden = true;
   shareCardEl.hidden = true;
+  inboxEl.hidden = true;
   expiredEl.hidden = true;
   logoutBtn.hidden = true;
 }
@@ -85,9 +104,11 @@ function showShareComposer() {
   expiredEl.hidden = true;
   composerEl.hidden = false;
   shareCardEl.hidden = true;
+  inboxEl.hidden = false;
   logoutBtn.hidden = true;
   accountEl.textContent = `一時リンクで表示中です（${formatShareExpiry(shareExpiresAt)} まで有効）`;
   refreshState();
+  loadComments();
 }
 
 function showShareExpired() {
@@ -96,6 +117,7 @@ function showShareExpired() {
   gateEl.hidden = true;
   composerEl.hidden = true;
   shareCardEl.hidden = true;
+  inboxEl.hidden = true;
   logoutBtn.hidden = true;
   expiredEl.hidden = false;
 }
@@ -218,6 +240,180 @@ function showError(message) {
   statusEl.append(span);
   postBtn.disabled = false;
 }
+
+// --- Comment inbox ---
+
+function showInboxError(message) {
+  inboxStatusEl.innerHTML = "";
+  const span = document.createElement("span");
+  span.className = "error";
+  span.textContent = message;
+  inboxStatusEl.append(span);
+}
+
+function renderComment(view) {
+  const article = document.createElement("article");
+  article.className = "comment-item";
+
+  const meta = document.createElement("p");
+  meta.className = "comment-meta";
+  const author = document.createElement("strong");
+  author.textContent = view.authorLabel || view.authorName;
+  meta.append(author);
+  if (view.timeLabel) {
+    meta.append(" ", view.timeLabel);
+  }
+  const badge = document.createElement("span");
+  badge.className = view.replied ? "badge badge-replied" : "badge";
+  badge.textContent = view.badgeLabel;
+  meta.append(" ", badge);
+  article.append(meta);
+
+  const body = document.createElement("p");
+  body.className = "comment-text";
+  body.textContent = view.text;
+  article.append(body);
+
+  const links = document.createElement("p");
+  links.className = "comment-links meta";
+  if (view.commentUrl) {
+    const a = document.createElement("a");
+    a.href = view.commentUrl;
+    a.textContent = "コメントを見る";
+    a.target = "_blank";
+    a.rel = "noopener";
+    links.append(a);
+  }
+  if (view.parentUrl) {
+    if (links.childNodes.length > 0) {
+      links.append(" ／ ");
+    }
+    const a = document.createElement("a");
+    a.href = view.parentUrl;
+    a.textContent = "返信先の投稿を見る";
+    a.target = "_blank";
+    a.rel = "noopener";
+    links.append(a);
+  }
+  if (links.childNodes.length > 0) {
+    article.append(links);
+  }
+
+  // Reply box: same counting rule and no pre-send confirmation,
+  // matching the existing post flow.
+  const replyText = document.createElement("textarea");
+  replyText.rows = 3;
+  replyText.placeholder = "返信する文面";
+  replyText.setAttribute("aria-label", "返信する文面");
+
+  const row = document.createElement("div");
+  row.className = "composer-row";
+  const count = document.createElement("span");
+  count.className = "meta";
+  const countValue = document.createElement("span");
+  countValue.textContent = "0";
+  count.append(countValue, " / 280");
+  const replyBtn = document.createElement("button");
+  replyBtn.type = "button";
+  replyBtn.className = "post-button";
+  replyBtn.textContent = "返信する";
+  replyBtn.disabled = true;
+  row.append(count, replyBtn);
+
+  const replyStatus = document.createElement("div");
+  replyStatus.className = "comment-reply-status";
+
+  replyText.addEventListener("input", () => {
+    countValue.textContent = countText(replyText.value);
+    replyBtn.disabled = !canReply(idToken || shareToken, replyText.value);
+  });
+
+  replyBtn.addEventListener("click", async () => {
+    replyBtn.disabled = true;
+    replyStatus.textContent = "返信しています…";
+    try {
+      const data = shareToken
+        ? await replyCommentWithShare(CONFIG.GAS_ENDPOINT, shareToken, view.commentId, replyText.value)
+        : await replyComment(CONFIG.GAS_ENDPOINT, idToken, view.commentId, replyText.value);
+      if (data.ok) {
+        replyStatus.innerHTML = "";
+        if (data.dry_run) {
+          replyStatus.textContent = "ステージングでは返信しません（ドライラン）。";
+        } else if (data.url) {
+          const a = document.createElement("a");
+          a.href = data.url;
+          a.textContent = data.url;
+          a.target = "_blank";
+          a.rel = "noopener";
+          replyStatus.append("返信しました：\n", a);
+          if (data.verifiedText != null) {
+            replyStatus.append("\n確認済みの本文：" + data.verifiedText);
+          }
+        } else {
+          replyStatus.textContent = "返信しました。";
+        }
+        replyText.value = "";
+        countValue.textContent = "0";
+        // Refresh so the replied state (badge) becomes visible.
+        await loadComments();
+      } else if (shareToken && data.error === "unauthorized") {
+        showShareExpired();
+      } else {
+        const span = document.createElement("span");
+        span.className = "error";
+        span.textContent = "失敗しました：" + data.error;
+        replyStatus.innerHTML = "";
+        replyStatus.append(span);
+        replyBtn.disabled = false;
+      }
+    } catch (err) {
+      const span = document.createElement("span");
+      span.className = "error";
+      span.textContent = "通信に失敗しました：" + err;
+      replyStatus.innerHTML = "";
+      replyStatus.append(span);
+      replyBtn.disabled = false;
+    }
+  });
+
+  article.append(replyText, row, replyStatus);
+  return article;
+}
+
+async function loadComments() {
+  if (!(idToken || shareToken)) {
+    return;
+  }
+  inboxRefreshBtn.disabled = true;
+  inboxStatusEl.textContent = "読み込んでいます…";
+  try {
+    const data = shareToken
+      ? await listCommentsWithShare(CONFIG.GAS_ENDPOINT, shareToken)
+      : await listComments(CONFIG.GAS_ENDPOINT, idToken);
+    if (data.ok) {
+      inboxStatusEl.textContent = "";
+      const notes = inboxNotes(data);
+      inboxNoteEl.hidden = notes.length === 0;
+      inboxNoteEl.textContent = notes.join(" ");
+      const views = normalizeComments(data.comments);
+      inboxListEl.innerHTML = "";
+      for (const view of views) {
+        inboxListEl.append(renderComment(view));
+      }
+      inboxEmptyEl.hidden = views.length !== 0 || Boolean(data.dry_run);
+    } else if (shareToken && data.error === "unauthorized") {
+      showShareExpired();
+    } else {
+      showInboxError("取得に失敗しました：" + data.error);
+    }
+  } catch (err) {
+    showInboxError("通信に失敗しました：" + err);
+  } finally {
+    inboxRefreshBtn.disabled = false;
+  }
+}
+
+inboxRefreshBtn.addEventListener("click", loadComments);
 
 postBtn.addEventListener("click", async () => {
   postBtn.disabled = true;

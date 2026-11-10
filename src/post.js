@@ -3,6 +3,10 @@
 // has always used). Each function returns the parsed JSON response
 // ({ ok, ... } or { ok: false, error }) and throws on network/parse
 // failure.
+import {
+  buildListCommentsPayload,
+  buildReplyCommentPayload,
+} from "./comments.js";
 async function sendJson(endpoint, payload, fetchImpl) {
   const res = await fetchImpl(endpoint, {
     method: "POST",
@@ -33,4 +37,41 @@ export async function validateShareToken(endpoint, shareToken, fetchImpl = fetch
 // "revoke_share"; requires the owner's Google ID token.
 export async function shareAction(endpoint, idToken, action, fetchImpl = fetch) {
   return sendJson(endpoint, { idToken, action }, fetchImpl);
+}
+
+// Comment inbox: list comments on our tweets. Same endpoint and auth
+// as posting; the action field selects the operation server-side.
+export async function listComments(endpoint, idToken, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildListCommentsPayload({ idToken }),
+    fetchImpl,
+  );
+}
+
+export async function listCommentsWithShare(endpoint, shareToken, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildListCommentsPayload({ shareToken }),
+    fetchImpl,
+  );
+}
+
+// Reply to one comment. The success response has the same shape as a
+// post success ({ ok, id, url, text, ... }); in DRY_RUN it also
+// carries dry_run: true.
+export async function replyComment(endpoint, idToken, commentId, text, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildReplyCommentPayload({ idToken }, commentId, text),
+    fetchImpl,
+  );
+}
+
+export async function replyCommentWithShare(endpoint, shareToken, commentId, text, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildReplyCommentPayload({ shareToken }, commentId, text),
+    fetchImpl,
+  );
 }
