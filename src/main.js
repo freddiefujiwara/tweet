@@ -12,8 +12,21 @@ import {
   listCommentsWithShare,
   replyComment,
   replyCommentWithShare,
+  listDms,
+  listDmsWithShare,
+  markDmRead,
+  markDmReadWithShare,
+  replyDm,
+  replyDmWithShare,
 } from "./post.js";
 import { normalizeComments, inboxNotes, canReply } from "./comments.js";
+import {
+  normalizeConversations,
+  dmNotes,
+  canReplyDm,
+  countDmText,
+  DM_MAX_LENGTH,
+} from "./dms.js";
 import {
   parseShareToken,
   buildShareUrl,
@@ -54,6 +67,12 @@ const inboxNoteEl = document.getElementById("inbox-note");
 const inboxStatusEl = document.getElementById("inbox-status");
 const inboxListEl = document.getElementById("inbox-list");
 const inboxEmptyEl = document.getElementById("inbox-empty");
+const dmEl = document.getElementById("dm");
+const dmRefreshBtn = document.getElementById("dm-refresh");
+const dmNoteEl = document.getElementById("dm-note");
+const dmStatusEl = document.getElementById("dm-status");
+const dmListEl = document.getElementById("dm-list");
+const dmEmptyEl = document.getElementById("dm-empty");
 
 let idToken = null;
 // Set when the page was opened via a temporary access link (#share=…).
@@ -84,10 +103,12 @@ function showComposer(email) {
   composerEl.hidden = false;
   shareCardEl.hidden = false;
   inboxEl.hidden = false;
+  dmEl.hidden = false;
   logoutBtn.hidden = false;
   accountEl.textContent = "ログイン中：" + email;
   refreshState();
   loadComments();
+  loadDms();
 }
 
 function showGate() {
@@ -95,6 +116,7 @@ function showGate() {
   composerEl.hidden = true;
   shareCardEl.hidden = true;
   inboxEl.hidden = true;
+  dmEl.hidden = true;
   expiredEl.hidden = true;
   logoutBtn.hidden = true;
 }
@@ -105,10 +127,12 @@ function showShareComposer() {
   composerEl.hidden = false;
   shareCardEl.hidden = true;
   inboxEl.hidden = false;
+  dmEl.hidden = false;
   logoutBtn.hidden = true;
   accountEl.textContent = `一時リンクで表示中です（${formatShareExpiry(shareExpiresAt)} まで有効）`;
   refreshState();
   loadComments();
+  loadDms();
 }
 
 function showShareExpired() {
@@ -118,6 +142,7 @@ function showShareExpired() {
   composerEl.hidden = true;
   shareCardEl.hidden = true;
   inboxEl.hidden = true;
+  dmEl.hidden = true;
   logoutBtn.hidden = true;
   expiredEl.hidden = false;
 }
@@ -414,6 +439,255 @@ async function loadComments() {
 }
 
 inboxRefreshBtn.addEventListener("click", loadComments);
+
+// --- DM inbox ---
+// Independent from the comment inbox: both load in parallel after
+// sign-in, and a failure in one never blocks the other.
+
+// Conversation views from the latest list_dms response.
+let dmViews = [];
+// True when the latest list response was a dry run (staging). While
+// dry-running, opening a conversation must not call mark_dm_read.
+let dmDryRun = false;
+// Conversation whose thread is currently expanded.
+let openDmConversationId = null;
+// Conversations a mark_dm_read request was already sent for, so
+// reopening never sends it twice.
+const dmMarkRequested = new Set();
+// Notice to show inside a thread after a reply-triggered reload
+// rebuilds the DOM (e.g. the staging dry-run message).
+let dmThreadNotice = null;
+
+function showDmError(message) {
+  dmStatusEl.innerHTML = "";
+  const span = document.createElement("span");
+  span.className = "error";
+  span.textContent = message;
+  dmStatusEl.append(span);
+}
+
+function renderDmThread(view) {
+  const thread = document.createElement("div");
+  thread.className = "dm-thread";
+
+  for (const message of view.messages) {
+    const item = document.createElement("div");
+    item.className = message.isMine ? "dm-message dm-message-mine" : "dm-message";
+    const meta = document.createElement("p");
+    meta.className = "dm-message-meta";
+    const sender = document.createElement("strong");
+    sender.textContent = message.senderLabel;
+    meta.append(sender);
+    if (message.timeLabel) {
+      meta.append(" ", message.timeLabel);
+    }
+    const body = document.createElement("p");
+    body.className = "dm-message-text";
+    body.textContent = message.text;
+    item.append(meta, body);
+    thread.append(item);
+  }
+  if (view.messages.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "meta";
+    empty.textContent = "メッセージはありません。";
+    thread.append(empty);
+  }
+
+  // Reply box: code point count with a 10,000 limit (a different
+  // rule from the 280 post count).
+  const replyText = document.createElement("textarea");
+  replyText.rows = 3;
+  replyText.placeholder = "返信する文面";
+  replyText.setAttribute("aria-label", "DMに返信する文面");
+
+  const row = document.createElement("div");
+  row.className = "composer-row";
+  const count = document.createElement("span");
+  count.className = "meta";
+  const countValue = document.createElement("span");
+  countValue.textContent = "0";
+  count.append(countValue, ` / ${DM_MAX_LENGTH}`);
+  const replyBtn = document.createElement("button");
+  replyBtn.type = "button";
+  replyBtn.className = "post-button";
+  replyBtn.textContent = "送信する";
+  replyBtn.disabled = true;
+  row.append(count, replyBtn);
+
+  const replyStatus = document.createElement("div");
+  replyStatus.className = "comment-reply-status";
+  if (dmThreadNotice && dmThreadNotice.conversationId === view.conversationId) {
+    replyStatus.textContent = dmThreadNotice.text;
+    dmThreadNotice = null;
+  }
+
+  replyText.addEventListener("input", () => {
+    countValue.textContent = countDmText(replyText.value);
+    replyBtn.disabled = !canReplyDm(idToken || shareToken, replyText.value);
+  });
+
+  replyBtn.addEventListener("click", async () => {
+    replyBtn.disabled = true;
+    replyStatus.textContent = "送信しています…";
+    try {
+      const data = shareToken
+        ? await replyDmWithShare(CONFIG.GAS_ENDPOINT, shareToken, view.conversationId, replyText.value)
+        : await replyDm(CONFIG.GAS_ENDPOINT, idToken, view.conversationId, replyText.value);
+      if (data.ok) {
+        replyText.value = "";
+        countValue.textContent = "0";
+        dmThreadNotice = {
+          conversationId: view.conversationId,
+          text: data.dry_run
+            ? "ステージングではDMを送信しません（ドライラン）。"
+            : "送信しました。",
+        };
+        // Reload so state changes (badges, latest message) show;
+        // the open conversation stays open.
+        await loadDms();
+      } else if (shareToken && data.error === "unauthorized") {
+        showShareExpired();
+      } else {
+        const span = document.createElement("span");
+        span.className = "error";
+        span.textContent = "失敗しました：" + data.error;
+        replyStatus.innerHTML = "";
+        replyStatus.append(span);
+        replyBtn.disabled = false;
+      }
+    } catch (err) {
+      const span = document.createElement("span");
+      span.className = "error";
+      span.textContent = "通信に失敗しました：" + err;
+      replyStatus.innerHTML = "";
+      replyStatus.append(span);
+      replyBtn.disabled = false;
+    }
+  });
+
+  thread.append(replyText, row, replyStatus);
+  return thread;
+}
+
+async function markDmConversationRead(view) {
+  if (!view.unread || dmDryRun || !view.latestEventId) {
+    return;
+  }
+  if (dmMarkRequested.has(view.conversationId)) {
+    return;
+  }
+  dmMarkRequested.add(view.conversationId);
+  // Optimistically clear the unread badge; a failed request leaves
+  // the guard in place so it is not retried in a loop.
+  view.unread = false;
+  view.badges = view.badges.filter((b) => b.key !== "unread");
+  view.badgeLabels = view.badges.map((b) => b.label);
+  try {
+    const data = shareToken
+      ? await markDmReadWithShare(CONFIG.GAS_ENDPOINT, shareToken, view.conversationId, view.latestEventId)
+      : await markDmRead(CONFIG.GAS_ENDPOINT, idToken, view.conversationId, view.latestEventId);
+    if (!data.ok && shareToken && data.error === "unauthorized") {
+      showShareExpired();
+    }
+  } catch {
+    // Read-marking is best-effort: the thread is already open and
+    // the next list reload will show the server's state.
+  }
+}
+
+function renderDmConversation(view) {
+  const article = document.createElement("article");
+  article.className = "comment-item";
+
+  const header = document.createElement("button");
+  header.type = "button";
+  header.className = "dm-header";
+  const who = document.createElement("span");
+  const name = document.createElement("strong");
+  name.textContent = view.participantLabel;
+  who.append(name);
+  for (const badge of view.badges) {
+    const span = document.createElement("span");
+    span.className =
+      badge.key === "needs_reply" ? "badge badge-needs-reply" : "badge";
+    span.textContent = badge.label;
+    who.append(" ", span);
+  }
+  header.append(who);
+  if (view.timeLabel) {
+    const time = document.createElement("span");
+    time.className = "meta";
+    time.textContent = view.timeLabel;
+    header.append(time);
+  }
+  header.addEventListener("click", () => {
+    if (openDmConversationId === view.conversationId) {
+      openDmConversationId = null;
+      renderDmList();
+    } else {
+      openDmConversationId = view.conversationId;
+      renderDmList();
+      // Opening an unread conversation marks it read (once).
+      markDmConversationRead(view).then(() => {
+        if (openDmConversationId === view.conversationId) {
+          renderDmList();
+        }
+      });
+    }
+  });
+  article.append(header);
+
+  const preview = document.createElement("p");
+  preview.className = "comment-text dm-preview";
+  preview.textContent = view.preview;
+  article.append(preview);
+
+  if (openDmConversationId === view.conversationId) {
+    article.append(renderDmThread(view));
+  }
+  return article;
+}
+
+function renderDmList() {
+  dmListEl.innerHTML = "";
+  for (const view of dmViews) {
+    dmListEl.append(renderDmConversation(view));
+  }
+  dmEmptyEl.hidden = dmViews.length !== 0 || dmDryRun;
+}
+
+async function loadDms() {
+  if (!(idToken || shareToken)) {
+    return;
+  }
+  dmRefreshBtn.disabled = true;
+  dmStatusEl.textContent = "読み込んでいます…";
+  try {
+    const data = shareToken
+      ? await listDmsWithShare(CONFIG.GAS_ENDPOINT, shareToken)
+      : await listDms(CONFIG.GAS_ENDPOINT, idToken);
+    if (data.ok) {
+      dmStatusEl.textContent = "";
+      dmDryRun = Boolean(data.dry_run);
+      const notes = dmNotes(data);
+      dmNoteEl.hidden = notes.length === 0;
+      dmNoteEl.textContent = notes.join(" ");
+      dmViews = normalizeConversations(data.conversations);
+      renderDmList();
+    } else if (shareToken && data.error === "unauthorized") {
+      showShareExpired();
+    } else {
+      showDmError("取得に失敗しました：" + data.error);
+    }
+  } catch (err) {
+    showDmError("通信に失敗しました：" + err);
+  } finally {
+    dmRefreshBtn.disabled = false;
+  }
+}
+
+dmRefreshBtn.addEventListener("click", loadDms);
 
 postBtn.addEventListener("click", async () => {
   postBtn.disabled = true;
