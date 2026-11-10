@@ -19,13 +19,31 @@ export function buildListCommentsPayload(auth) {
   return { idToken: auth?.idToken ?? null, action: "list_comments" };
 }
 
-export function buildReplyCommentPayload(auth, commentId, text) {
+/**
+ * Whether a reply should be sent as a quote repost.
+ * Accepts a boolean, or an options object shaped as
+ * { asQuote: true } / { as_quote: true }.
+ */
+export function isQuoteReply(options) {
+  if (options === true) {
+    return true;
+  }
+  if (options && typeof options === "object") {
+    return Boolean(options.asQuote ?? options.as_quote);
+  }
+  return false;
+}
+
+export function buildReplyCommentPayload(auth, commentId, text, options) {
+  const asQuote = isQuoteReply(options);
+  const extra = asQuote ? { as_quote: true } : {};
   if (auth?.shareToken) {
     return {
       share_token: auth.shareToken,
       action: "reply_comment",
       comment_id: commentId,
       text,
+      ...extra,
     };
   }
   return {
@@ -33,6 +51,7 @@ export function buildReplyCommentPayload(auth, commentId, text) {
     action: "reply_comment",
     comment_id: commentId,
     text,
+    ...extra,
   };
 }
 
@@ -69,6 +88,33 @@ export function badgeFor(comment) {
     : { label: "未返信", replied: false };
 }
 
+// --- Kind badge ---
+// list_comments items carry `kind`: "mention" | "reply" | "quote".
+// Only quote items get an extra badge; mention/reply and legacy
+// items without a kind get none.
+
+export function isQuote(comment) {
+  return comment?.kind === "quote";
+}
+
+export function kindBadgeFor(comment) {
+  return isQuote(comment) ? { label: "引用", kind: "quote" } : null;
+}
+
+/**
+ * All badges for a comment, status badge first, then the kind
+ * badge when present. Always returns at least the status badge.
+ */
+export function badgesFor(comment) {
+  const status = badgeFor(comment);
+  const badges = [{ key: "status", label: status.label, replied: status.replied }];
+  const kind = kindBadgeFor(comment);
+  if (kind) {
+    badges.push({ key: "quote", label: kind.label, kind: kind.kind });
+  }
+  return badges;
+}
+
 // --- Time formatting ---
 
 /** "2026/11/10 14:53" in local time; "" when the value is invalid. */
@@ -86,6 +132,7 @@ export function formatCommentTime(value) {
 /** Convert one API comment into the shape the inbox renders. */
 export function toCommentView(comment) {
   const badge = badgeFor(comment);
+  const kindBadge = kindBadgeFor(comment);
   const name = comment?.author_name || "";
   const username = comment?.author_username || "";
   return {
@@ -101,6 +148,10 @@ export function toCommentView(comment) {
     status: comment?.status ?? "new",
     replied: badge.replied,
     badgeLabel: badge.label,
+    kind: comment?.kind ?? null,
+    isQuote: Boolean(kindBadge),
+    kindBadgeLabel: kindBadge?.label ?? null,
+    badges: badgesFor(comment),
     ourReplyId: comment?.our_reply_id ?? null,
   };
 }

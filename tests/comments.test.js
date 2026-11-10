@@ -7,6 +7,10 @@ import {
   parentTweetUrl,
   isReplied,
   badgeFor,
+  isQuote,
+  kindBadgeFor,
+  badgesFor,
+  isQuoteReply,
   formatCommentTime,
   toCommentView,
   normalizeComments,
@@ -62,6 +66,45 @@ describe("buildReplyCommentPayload", () => {
       text: "hi",
     });
   });
+
+  it("adds as_quote: true only when quoting (ID token)", () => {
+    expect(
+      buildReplyCommentPayload({ idToken: "tok" }, "123", "hi", { asQuote: true }),
+    ).toEqual({
+      idToken: "tok",
+      action: "reply_comment",
+      comment_id: "123",
+      text: "hi",
+      as_quote: true,
+    });
+    // Boolean shorthand is also accepted.
+    expect(
+      buildReplyCommentPayload({ idToken: "tok" }, "123", "hi", true),
+    ).toEqual(expect.objectContaining({ as_quote: true }));
+  });
+
+  it("adds as_quote: true only when quoting (share token)", () => {
+    expect(
+      buildReplyCommentPayload({ shareToken: "share" }, "123", "hi", { asQuote: true }),
+    ).toEqual({
+      share_token: "share",
+      action: "reply_comment",
+      comment_id: "123",
+      text: "hi",
+      as_quote: true,
+    });
+  });
+
+  it("omits as_quote for a normal reply", () => {
+    for (const options of [undefined, false, { asQuote: false }, { as_quote: false }, {}]) {
+      const payload = buildReplyCommentPayload({ idToken: "tok" }, "123", "hi", options);
+      expect(payload).not.toHaveProperty("as_quote");
+    }
+    expect(isQuoteReply({ asQuote: true })).toBe(true);
+    expect(isQuoteReply(true)).toBe(true);
+    expect(isQuoteReply({ asQuote: false })).toBe(false);
+    expect(isQuoteReply(undefined)).toBe(false);
+  });
 });
 
 describe("comment links", () => {
@@ -102,6 +145,44 @@ describe("badge judgement", () => {
   });
 });
 
+describe("kind / quote badge", () => {
+  it("shows the 引用 badge only for kind=quote", () => {
+    expect(isQuote({ kind: "quote" })).toBe(true);
+    expect(kindBadgeFor({ kind: "quote" })).toEqual({ label: "引用", kind: "quote" });
+    for (const kind of ["mention", "reply", undefined, null, "", "other"]) {
+      expect(isQuote({ kind })).toBe(false);
+      expect(kindBadgeFor({ kind })).toBeNull();
+    }
+    expect(isQuote({})).toBe(false);
+    expect(isQuote(null)).toBe(false);
+    expect(kindBadgeFor(null)).toBeNull();
+  });
+
+  it("combines the quote badge with the status badge", () => {
+    expect(badgesFor({ status: "new", kind: "quote" })).toEqual([
+      { key: "status", label: "未返信", replied: false },
+      { key: "quote", label: "引用", kind: "quote" },
+    ]);
+    expect(badgesFor({ status: "replied", kind: "quote" })).toEqual([
+      { key: "status", label: "返信済み", replied: true },
+      { key: "quote", label: "引用", kind: "quote" },
+    ]);
+  });
+
+  it("returns only the status badge for non-quote and legacy items", () => {
+    expect(badgesFor({ status: "new", kind: "mention" })).toEqual([
+      { key: "status", label: "未返信", replied: false },
+    ]);
+    expect(badgesFor({ status: "new", kind: "reply" })).toEqual([
+      { key: "status", label: "未返信", replied: false },
+    ]);
+    // Legacy data without kind: no kind badge.
+    expect(badgesFor({ status: "new" })).toEqual([
+      { key: "status", label: "未返信", replied: false },
+    ]);
+  });
+});
+
 describe("formatCommentTime", () => {
   it("formats as YYYY/MM/DD HH:MM in local time", () => {
     const iso = new Date(2026, 10, 10, 14, 53).toISOString();
@@ -131,6 +212,33 @@ describe("toCommentView", () => {
   it("omits the @ label when the username is missing", () => {
     const view = toCommentView({ ...baseComment, author_username: "" });
     expect(view.authorLabel).toBe("誰か");
+  });
+
+  it("exposes the quote badge only for kind=quote", () => {
+    const quoteView = toCommentView({ ...baseComment, kind: "quote" });
+    expect(quoteView.kind).toBe("quote");
+    expect(quoteView.isQuote).toBe(true);
+    expect(quoteView.kindBadgeLabel).toBe("引用");
+    expect(quoteView.badges.map((b) => b.label)).toEqual(["未返信", "引用"]);
+
+    for (const kind of ["mention", "reply"]) {
+      const view = toCommentView({ ...baseComment, kind });
+      expect(view.isQuote).toBe(false);
+      expect(view.kindBadgeLabel).toBeNull();
+      expect(view.badges.map((b) => b.label)).toEqual(["未返信"]);
+    }
+
+    const legacyView = toCommentView(baseComment);
+    expect(legacyView.kind).toBeNull();
+    expect(legacyView.isQuote).toBe(false);
+    expect(legacyView.kindBadgeLabel).toBeNull();
+  });
+
+  it("keeps the quote badge alongside 返信済み", () => {
+    const view = toCommentView({ ...baseComment, kind: "quote", status: "replied" });
+    expect(view.badgeLabel).toBe("返信済み");
+    expect(view.kindBadgeLabel).toBe("引用");
+    expect(view.badges.map((b) => b.label)).toEqual(["返信済み", "引用"]);
   });
 });
 

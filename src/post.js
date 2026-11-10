@@ -65,19 +65,39 @@ export async function listCommentsWithShare(endpoint, shareToken, fetchImpl = fe
 // Reply to one comment. The success response has the same shape as a
 // post success ({ ok, id, url, text, ... }); in DRY_RUN it also
 // carries dry_run: true.
-export async function replyComment(endpoint, idToken, commentId, text, fetchImpl = fetch) {
+//
+// The reply method is selected with an optional options argument:
+// { asQuote: true } sends the reply as a quote repost
+// (as_quote: true on the payload); omitted / false sends a normal
+// reply with no as_quote field. For backward compatibility the
+// options argument may be omitted and fetchImpl passed directly as
+// the fifth argument, or passed as the sixth argument.
+function resolveReplyArgs(options, fetchImpl) {
+  if (typeof options === "function") {
+    return { options: undefined, fetchImpl: options };
+  }
+  if (options && typeof options === "object" && typeof options.fetchImpl === "function" && fetchImpl === undefined) {
+    const { fetchImpl: innerFetch, ...rest } = options;
+    return { options: rest, fetchImpl: innerFetch };
+  }
+  return { options, fetchImpl: fetchImpl ?? fetch };
+}
+
+export async function replyComment(endpoint, idToken, commentId, text, options, fetchImpl) {
+  const resolved = resolveReplyArgs(options, fetchImpl);
   return sendJson(
     endpoint,
-    buildReplyCommentPayload({ idToken }, commentId, text),
-    fetchImpl,
+    buildReplyCommentPayload({ idToken }, commentId, text, resolved.options),
+    resolved.fetchImpl,
   );
 }
 
-export async function replyCommentWithShare(endpoint, shareToken, commentId, text, fetchImpl = fetch) {
+export async function replyCommentWithShare(endpoint, shareToken, commentId, text, options, fetchImpl) {
+  const resolved = resolveReplyArgs(options, fetchImpl);
   return sendJson(
     endpoint,
-    buildReplyCommentPayload({ shareToken }, commentId, text),
-    fetchImpl,
+    buildReplyCommentPayload({ shareToken }, commentId, text, resolved.options),
+    resolved.fetchImpl,
   );
 }
 
