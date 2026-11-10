@@ -19,8 +19,8 @@
     <link rel="icon"
   href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23000'/%3E%3Ctext x='32' y='42' font-size='34' text-anchor='middle' fill='white' font-family='system-ui'%3EF%3C/text%3E%3C/svg%3E" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script type="module" crossorigin src="/tweet/staging/assets/index-CkKEb4BA.js"></script>
-    <link rel="stylesheet" crossorigin href="/tweet/staging/assets/index-R1Xut9vE.css">
+    <script type="module" crossorigin src="/tweet/staging/assets/index-m-8t5Mk-.js"></script>
+    <link rel="stylesheet" crossorigin href="/tweet/staging/assets/index-CE5hMtN-.css">
   </head>
   <body>
     <div class="layout">
@@ -62,6 +62,16 @@
           <div id="inbox-status"></div>
           <div id="inbox-list"></div>
           <p id="inbox-empty" class="meta" hidden>コメントはありません。</p>
+        </section>
+        <section id="dm" class="table-wrap" hidden>
+          <div class="inbox-header">
+            <h2 class="section-title">DM</h2>
+            <button id="dm-refresh" class="theme-toggle" type="button">更新</button>
+          </div>
+          <p id="dm-note" class="meta" hidden></p>
+          <div id="dm-status"></div>
+          <div id="dm-list"></div>
+          <p id="dm-empty" class="meta" hidden>DMはありません。</p>
         </section>
         <section id="share-card" class="table-wrap" hidden>
           <h2 class="section-title">一時アクセスリンク</h2>
