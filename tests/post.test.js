@@ -8,6 +8,12 @@ import {
   listCommentsWithShare,
   replyComment,
   replyCommentWithShare,
+  listDms,
+  listDmsWithShare,
+  markDmRead,
+  markDmReadWithShare,
+  replyDm,
+  replyDmWithShare,
 } from "../src/post.js";
 
 function stubFetch(json) {
@@ -144,6 +150,116 @@ describe("comment inbox requests", () => {
     await expect(listComments("https://example.com/exec", "tok", fetchImpl))
       .rejects.toThrow("offline");
     await expect(replyComment("https://example.com/exec", "tok", "1", "x", fetchImpl))
+      .rejects.toThrow("offline");
+  });
+});
+
+describe("DM inbox requests", () => {
+  it("lists DMs with the ID token", async () => {
+    const payload = { ok: true, conversations: [{ conversation_id: "conv1" }] };
+    const fetchImpl = stubFetch(payload);
+    const data = await listDms("https://example.com/exec", "tok", fetchImpl);
+    expect(data).toEqual(payload);
+    const [url, options] = fetchImpl.mock.calls[0];
+    expect(url).toBe("https://example.com/exec");
+    expect(options.method).toBe("POST");
+    expect(options.headers["Content-Type"]).toBe("text/plain;charset=utf-8");
+    expect(JSON.parse(options.body)).toEqual({ idToken: "tok", action: "list_dms" });
+  });
+
+  it("lists DMs with a share token", async () => {
+    const fetchImpl = stubFetch({ ok: true, conversations: [], dry_run: true });
+    const data = await listDmsWithShare("https://example.com/exec", "share-tok", fetchImpl);
+    expect(data.dry_run).toBe(true);
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      share_token: "share-tok",
+      action: "list_dms",
+    });
+  });
+
+  it("marks a conversation read with the ID token", async () => {
+    const fetchImpl = stubFetch({ ok: true });
+    const data = await markDmRead(
+      "https://example.com/exec",
+      "tok",
+      "conv1",
+      "ev2",
+      fetchImpl,
+    );
+    expect(data).toEqual({ ok: true });
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      idToken: "tok",
+      action: "mark_dm_read",
+      conversation_id: "conv1",
+      event_id: "ev2",
+    });
+  });
+
+  it("marks a conversation read with a share token", async () => {
+    const fetchImpl = stubFetch({ ok: true });
+    await markDmReadWithShare(
+      "https://example.com/exec",
+      "share-tok",
+      "conv1",
+      "ev2",
+      fetchImpl,
+    );
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      share_token: "share-tok",
+      action: "mark_dm_read",
+      conversation_id: "conv1",
+      event_id: "ev2",
+    });
+  });
+
+  it("replies to a DM with the ID token", async () => {
+    const payload = { ok: true, conversation_id: "conv1", event_id: "ev9" };
+    const fetchImpl = stubFetch(payload);
+    const data = await replyDm(
+      "https://example.com/exec",
+      "tok",
+      "conv1",
+      "返信です",
+      fetchImpl,
+    );
+    expect(data).toEqual(payload);
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      idToken: "tok",
+      action: "reply_dm",
+      conversation_id: "conv1",
+      text: "返信です",
+    });
+  });
+
+  it("replies to a DM with a share token", async () => {
+    const fetchImpl = stubFetch({ ok: true, dry_run: true });
+    await replyDmWithShare(
+      "https://example.com/exec",
+      "share-tok",
+      "conv1",
+      "返信です",
+      fetchImpl,
+    );
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      share_token: "share-tok",
+      action: "reply_dm",
+      conversation_id: "conv1",
+      text: "返信です",
+    });
+  });
+
+  it("propagates network failures for DM requests", async () => {
+    const fetchImpl = vi.fn(async () => { throw new Error("offline"); });
+    await expect(listDms("https://example.com/exec", "tok", fetchImpl))
+      .rejects.toThrow("offline");
+    await expect(markDmRead("https://example.com/exec", "tok", "c", "e", fetchImpl))
+      .rejects.toThrow("offline");
+    await expect(replyDm("https://example.com/exec", "tok", "c", "x", fetchImpl))
       .rejects.toThrow("offline");
   });
 });

@@ -7,6 +7,11 @@ import {
   buildListCommentsPayload,
   buildReplyCommentPayload,
 } from "./comments.js";
+import {
+  buildListDmsPayload,
+  buildMarkDmReadPayload,
+  buildReplyDmPayload,
+} from "./dms.js";
 async function sendJson(endpoint, payload, fetchImpl) {
   const res = await fetchImpl(endpoint, {
     method: "POST",
@@ -72,6 +77,60 @@ export async function replyCommentWithShare(endpoint, shareToken, commentId, tex
   return sendJson(
     endpoint,
     buildReplyCommentPayload({ shareToken }, commentId, text),
+    fetchImpl,
+  );
+}
+
+// DM inbox: list DM conversations. Same endpoint and auth as
+// posting; the action field selects the operation server-side.
+export async function listDms(endpoint, idToken, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildListDmsPayload({ idToken }),
+    fetchImpl,
+  );
+}
+
+export async function listDmsWithShare(endpoint, shareToken, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildListDmsPayload({ shareToken }),
+    fetchImpl,
+  );
+}
+
+// Mark one conversation as read, up to the given (latest) event.
+export async function markDmRead(endpoint, idToken, conversationId, eventId, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildMarkDmReadPayload({ idToken }, conversationId, eventId),
+    fetchImpl,
+  );
+}
+
+export async function markDmReadWithShare(endpoint, shareToken, conversationId, eventId, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildMarkDmReadPayload({ shareToken }, conversationId, eventId),
+    fetchImpl,
+  );
+}
+
+// Reply inside one DM conversation. The success response carries
+// conversation_id and event_id; in DRY_RUN it also carries
+// dry_run: true.
+export async function replyDm(endpoint, idToken, conversationId, text, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildReplyDmPayload({ idToken }, conversationId, text),
+    fetchImpl,
+  );
+}
+
+export async function replyDmWithShare(endpoint, shareToken, conversationId, text, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildReplyDmPayload({ shareToken }, conversationId, text),
     fetchImpl,
   );
 }
