@@ -4,6 +4,10 @@ import {
   postTweetWithShare,
   validateShareToken,
   shareAction,
+  listComments,
+  listCommentsWithShare,
+  replyComment,
+  replyCommentWithShare,
 } from "../src/post.js";
 
 function stubFetch(json) {
@@ -70,5 +74,76 @@ describe("share requests", () => {
     await shareAction("https://example.com/exec", "tok", "revoke_share", fetchImpl2);
     const [, options2] = fetchImpl2.mock.calls[0];
     expect(JSON.parse(options2.body)).toEqual({ idToken: "tok", action: "revoke_share" });
+  });
+});
+
+describe("comment inbox requests", () => {
+  it("lists comments with the ID token", async () => {
+    const payload = { ok: true, comments: [{ comment_id: "1" }] };
+    const fetchImpl = stubFetch(payload);
+    const data = await listComments("https://example.com/exec", "tok", fetchImpl);
+    expect(data).toEqual(payload);
+    const [url, options] = fetchImpl.mock.calls[0];
+    expect(url).toBe("https://example.com/exec");
+    expect(options.method).toBe("POST");
+    expect(options.headers["Content-Type"]).toBe("text/plain;charset=utf-8");
+    expect(JSON.parse(options.body)).toEqual({ idToken: "tok", action: "list_comments" });
+  });
+
+  it("lists comments with a share token", async () => {
+    const fetchImpl = stubFetch({ ok: true, comments: [], dry_run: true });
+    const data = await listCommentsWithShare("https://example.com/exec", "share-tok", fetchImpl);
+    expect(data.dry_run).toBe(true);
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      share_token: "share-tok",
+      action: "list_comments",
+    });
+  });
+
+  it("replies to a comment with the ID token", async () => {
+    const payload = { ok: true, id: "555", url: "https://x.com/i/status/555", text: "返信" };
+    const fetchImpl = stubFetch(payload);
+    const data = await replyComment(
+      "https://example.com/exec",
+      "tok",
+      "123",
+      "返信",
+      fetchImpl,
+    );
+    expect(data).toEqual(payload);
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      idToken: "tok",
+      action: "reply_comment",
+      comment_id: "123",
+      text: "返信",
+    });
+  });
+
+  it("replies to a comment with a share token", async () => {
+    const fetchImpl = stubFetch({ ok: true, dry_run: true });
+    await replyCommentWithShare(
+      "https://example.com/exec",
+      "share-tok",
+      "123",
+      "返信",
+      fetchImpl,
+    );
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      share_token: "share-tok",
+      action: "reply_comment",
+      comment_id: "123",
+      text: "返信",
+    });
+  });
+
+  it("propagates network failures for comment requests", async () => {
+    const fetchImpl = vi.fn(async () => { throw new Error("offline"); });
+    await expect(listComments("https://example.com/exec", "tok", fetchImpl))
+      .rejects.toThrow("offline");
+    await expect(replyComment("https://example.com/exec", "tok", "1", "x", fetchImpl))
+      .rejects.toThrow("offline");
   });
 });
