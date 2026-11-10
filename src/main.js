@@ -292,6 +292,12 @@ function renderComment(view) {
   badge.className = view.replied ? "badge badge-replied" : "badge";
   badge.textContent = view.badgeLabel;
   meta.append(" ", badge);
+  if (view.isQuote) {
+    const quoteBadge = document.createElement("span");
+    quoteBadge.className = "badge badge-quote";
+    quoteBadge.textContent = view.kindBadgeLabel || "引用";
+    meta.append(" ", quoteBadge);
+  }
   article.append(meta);
 
   const body = document.createElement("p");
@@ -331,6 +337,16 @@ function renderComment(view) {
   replyText.placeholder = "返信する文面";
   replyText.setAttribute("aria-label", "返信する文面");
 
+  // Reply method toggle: unchecked sends a normal reply, checked
+  // sends the same text as a quote repost (as_quote: true).
+  const quoteToggle = document.createElement("label");
+  quoteToggle.className = "reply-mode-toggle";
+  const quoteCheckbox = document.createElement("input");
+  quoteCheckbox.type = "checkbox";
+  quoteCheckbox.className = "reply-as-quote";
+  quoteCheckbox.setAttribute("aria-label", "引用リポストで返す");
+  quoteToggle.append(quoteCheckbox, "引用リポストで返す");
+
   const row = document.createElement("div");
   row.className = "composer-row";
   const count = document.createElement("span");
@@ -345,6 +361,10 @@ function renderComment(view) {
   replyBtn.disabled = true;
   row.append(count, replyBtn);
 
+  quoteCheckbox.addEventListener("change", () => {
+    replyBtn.textContent = quoteCheckbox.checked ? "引用で返す" : "返信する";
+  });
+
   const replyStatus = document.createElement("div");
   replyStatus.className = "comment-reply-status";
 
@@ -355,30 +375,35 @@ function renderComment(view) {
 
   replyBtn.addEventListener("click", async () => {
     replyBtn.disabled = true;
-    replyStatus.textContent = "返信しています…";
+    const asQuote = quoteCheckbox.checked;
+    replyStatus.textContent = asQuote ? "引用リポストしています…" : "返信しています…";
     try {
       const data = shareToken
-        ? await replyCommentWithShare(CONFIG.GAS_ENDPOINT, shareToken, view.commentId, replyText.value)
-        : await replyComment(CONFIG.GAS_ENDPOINT, idToken, view.commentId, replyText.value);
+        ? await replyCommentWithShare(CONFIG.GAS_ENDPOINT, shareToken, view.commentId, replyText.value, { asQuote })
+        : await replyComment(CONFIG.GAS_ENDPOINT, idToken, view.commentId, replyText.value, { asQuote });
       if (data.ok) {
         replyStatus.innerHTML = "";
         if (data.dry_run) {
-          replyStatus.textContent = "ステージングでは返信しません（ドライラン）。";
+          replyStatus.textContent = asQuote
+            ? "ステージングでは引用リポストしません（ドライラン）。"
+            : "ステージングでは返信しません（ドライラン）。";
         } else if (data.url) {
           const a = document.createElement("a");
           a.href = data.url;
           a.textContent = data.url;
           a.target = "_blank";
           a.rel = "noopener";
-          replyStatus.append("返信しました：\n", a);
+          replyStatus.append(asQuote ? "引用リポストしました：\n" : "返信しました：\n", a);
           if (data.verifiedText != null) {
             replyStatus.append("\n確認済みの本文：" + data.verifiedText);
           }
         } else {
-          replyStatus.textContent = "返信しました。";
+          replyStatus.textContent = asQuote ? "引用リポストしました。" : "返信しました。";
         }
         replyText.value = "";
         countValue.textContent = "0";
+        quoteCheckbox.checked = false;
+        replyBtn.textContent = "返信する";
         // Refresh so the replied state (badge) becomes visible.
         await loadComments();
       } else if (shareToken && data.error === "unauthorized") {
@@ -401,7 +426,7 @@ function renderComment(view) {
     }
   });
 
-  article.append(replyText, row, replyStatus);
+  article.append(replyText, quoteToggle, row, replyStatus);
   return article;
 }
 

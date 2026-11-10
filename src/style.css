@@ -259,6 +259,25 @@ textarea:disabled {
   color: var(--error);
 }
 
+.badge-quote {
+  border-color: var(--link);
+  color: var(--link);
+}
+
+.reply-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.reply-mode-toggle input {
+  cursor: pointer;
+}
+
 .dm-header {
   display: flex;
   justify-content: space-between;

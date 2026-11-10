@@ -145,6 +145,66 @@ describe("comment inbox requests", () => {
     });
   });
 
+  it("sends as_quote: true when quoting with the ID token", async () => {
+    const fetchImpl = stubFetch({ ok: true, id: "556", url: "https://x.com/i/status/556" });
+    await replyComment(
+      "https://example.com/exec",
+      "tok",
+      "123",
+      "引用です",
+      { asQuote: true },
+      fetchImpl,
+    );
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      idToken: "tok",
+      action: "reply_comment",
+      comment_id: "123",
+      text: "引用です",
+      as_quote: true,
+    });
+  });
+
+  it("sends as_quote: true when quoting with a share token", async () => {
+    const fetchImpl = stubFetch({ ok: true, dry_run: true });
+    await replyCommentWithShare(
+      "https://example.com/exec",
+      "share-tok",
+      "123",
+      "引用です",
+      { asQuote: true },
+      fetchImpl,
+    );
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      share_token: "share-tok",
+      action: "reply_comment",
+      comment_id: "123",
+      text: "引用です",
+      as_quote: true,
+    });
+  });
+
+  it("omits as_quote for a normal reply via the options form", async () => {
+    const fetchImpl = stubFetch({ ok: true });
+    await replyComment(
+      "https://example.com/exec",
+      "tok",
+      "123",
+      "返信",
+      { asQuote: false },
+      fetchImpl,
+    );
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      idToken: "tok",
+      action: "reply_comment",
+      comment_id: "123",
+      text: "返信",
+    });
+    expect(JSON.parse(options.body)).not.toHaveProperty("as_quote");
+  });
+
   it("propagates network failures for comment requests", async () => {
     const fetchImpl = vi.fn(async () => { throw new Error("offline"); });
     await expect(listComments("https://example.com/exec", "tok", fetchImpl))
