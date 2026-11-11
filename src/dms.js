@@ -18,13 +18,18 @@ export const DM_MAX_LENGTH = 10000;
 export const DM_PREVIEW_LENGTH = 80;
 
 // --- Request payloads ---
-// Auth follows the existing post pattern: the owner's Google ID token
-// as { idToken }, or a temporary access link as { share_token }.
+// Auth follows the existing post pattern: the owner's 30-day session
+// token as { session_token }, a temporary access link as
+// { share_token }, or (only for the sign-in exchange itself) the
+// Google ID token as { idToken }.
 // A share token, when present, takes precedence (same as posting).
 
 export function buildListDmsPayload(auth) {
   if (auth?.shareToken) {
     return { share_token: auth.shareToken, action: "list_dms" };
+  }
+  if (auth?.sessionToken) {
+    return { session_token: auth.sessionToken, action: "list_dms" };
   }
   return { idToken: auth?.idToken ?? null, action: "list_dms" };
 }
@@ -33,6 +38,14 @@ export function buildMarkDmReadPayload(auth, conversationId, eventId) {
   if (auth?.shareToken) {
     return {
       share_token: auth.shareToken,
+      action: "mark_dm_read",
+      conversation_id: conversationId,
+      event_id: eventId,
+    };
+  }
+  if (auth?.sessionToken) {
+    return {
+      session_token: auth.sessionToken,
       action: "mark_dm_read",
       conversation_id: conversationId,
       event_id: eventId,
@@ -50,6 +63,14 @@ export function buildReplyDmPayload(auth, conversationId, text) {
   if (auth?.shareToken) {
     return {
       share_token: auth.shareToken,
+      action: "reply_dm",
+      conversation_id: conversationId,
+      text,
+    };
+  }
+  if (auth?.sessionToken) {
+    return {
+      session_token: auth.sessionToken,
       action: "reply_dm",
       conversation_id: conversationId,
       text,

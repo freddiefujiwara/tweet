@@ -64,6 +64,13 @@ describe("buildListDmsPayload", () => {
       action: "list_dms",
     });
   });
+
+  it("builds a session_token payload for the owner session", () => {
+    expect(buildListDmsPayload({ sessionToken: "sess" })).toEqual({
+      session_token: "sess",
+      action: "list_dms",
+    });
+  });
 });
 
 describe("buildMarkDmReadPayload", () => {

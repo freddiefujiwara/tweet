@@ -4,21 +4,30 @@ import { decodeJwtPayload } from "./auth.js";
 import { THEME_KEY, resolveTheme, nextTheme, applyTheme } from "./theme.js";
 import { countText, canPost } from "./composer.js";
 import {
-  postTweet,
+  postTweetWithSession,
   postTweetWithShare,
   validateShareToken,
-  shareAction,
-  listComments,
+  shareActionWithSession,
+  exchangeSession,
+  revokeSession,
+  listCommentsWithSession,
   listCommentsWithShare,
-  replyComment,
+  replyCommentWithSession,
   replyCommentWithShare,
-  listDms,
+  listDmsWithSession,
   listDmsWithShare,
-  markDmRead,
+  markDmReadWithSession,
   markDmReadWithShare,
-  replyDm,
+  replyDmWithSession,
   replyDmWithShare,
 } from "./post.js";
+import {
+  loadSavedSessionToken,
+  loadSavedSessionEmail,
+  saveSessionToken,
+  saveSessionEmail,
+  clearSavedSession,
+} from "./session.js";
 import { normalizeComments, inboxNotes, canReply } from "./comments.js";
 import {
   normalizeConversations,
@@ -41,6 +50,7 @@ if (isStagingBuild()) {
 }
 
 const gateEl = document.getElementById("gate");
+const gateErrorEl = document.getElementById("gate-error");
 const composerEl = document.getElementById("composer");
 const expiredEl = document.getElementById("share-expired");
 const textEl = document.getElementById("text");
@@ -74,7 +84,7 @@ const dmStatusEl = document.getElementById("dm-status");
 const dmListEl = document.getElementById("dm-list");
 const dmEmptyEl = document.getElementById("dm-empty");
 
-let idToken = null;
+let sessionToken = null;
 // Set when the page was opened via a temporary access link (#share=…).
 let shareToken = null;
 let shareExpiresAt = null;
@@ -92,7 +102,7 @@ themeBtn.addEventListener("click", () => {
 
 function refreshState() {
   countEl.textContent = countText(textEl.value);
-  postBtn.disabled = !canPost(idToken || shareToken, textEl.value);
+  postBtn.disabled = !canPost(sessionToken || shareToken, textEl.value);
 }
 
 textEl.addEventListener("input", refreshState);
@@ -105,7 +115,7 @@ function showComposer(email) {
   inboxEl.hidden = false;
   dmEl.hidden = false;
   logoutBtn.hidden = false;
-  accountEl.textContent = "ログイン中：" + email;
+  accountEl.textContent = email ? "ログイン中：" + email : "ログイン中";
   refreshState();
   loadComments();
   loadDms();
@@ -147,21 +157,64 @@ function showShareExpired() {
   expiredEl.hidden = false;
 }
 
-function onCredential(response) {
+async function onCredential(response) {
   // No client-side authorization gate: tweet-gas verifies the token
   // and the account, and rejects unauthorized posts server-side.
   const payload = decodeJwtPayload(response.credential);
-  idToken = response.credential;
+  // Exchange the (1-hour) ID token for a 30-day owner session and
+  // save that, so the next visit restores the session instead of
+  // starting at the gate.
+  let data = null;
+  try {
+    data = await exchangeSession(CONFIG.GAS_ENDPOINT, response.credential);
+  } catch {
+    data = null;
+  }
+  if (!data || !data.ok || !data.session_token) {
+    gateErrorEl.textContent = "ログインに失敗しました。もう一度お試しください。";
+    return;
+  }
+  sessionToken = data.session_token;
+  saveSessionToken(sessionToken);
+  saveSessionEmail(payload.email || "");
   showComposer(payload.email);
 }
 
 logoutBtn.addEventListener("click", () => {
-  idToken = null;
+  const endingSession = sessionToken;
+  sessionToken = null;
+  clearSavedSession();
+  if (endingSession) {
+    // Revoke the owner session server-side; local logout proceeds
+    // regardless of the outcome.
+    revokeSession(CONFIG.GAS_ENDPOINT, endingSession).catch(() => {});
+  }
   if (window.google) {
     google.accounts.id.disableAutoSelect();
   }
   showGate();
 });
+
+// The saved owner session turned out to be dead (expired or
+// revoked): drop it and return to the sign-in gate.
+function expireSession() {
+  sessionToken = null;
+  clearSavedSession();
+  showGate();
+  initGoogleSignIn();
+}
+
+function initGoogleSignIn() {
+  google.accounts.id.initialize({
+    client_id: CONFIG.GOOGLE_CLIENT_ID,
+    callback: onCredential,
+  });
+  google.accounts.id.renderButton(document.getElementById("signin"), {
+    theme: "outline",
+    size: "large",
+    text: "signin_with",
+  });
+}
 
 // --- Temporary access link (share mode) ---
 
@@ -198,7 +251,7 @@ function renderIssuedShare(data) {
 async function issueShare() {
   shareStatusEl.textContent = "発行しています…";
   try {
-    const data = await shareAction(CONFIG.GAS_ENDPOINT, idToken, "issue_share");
+    const data = await shareActionWithSession(CONFIG.GAS_ENDPOINT, sessionToken, "issue_share");
     if (data.ok) {
       renderIssuedShare(data);
     } else {
@@ -215,7 +268,7 @@ shareReissueBtn.addEventListener("click", issueShare);
 shareRevokeBtn.addEventListener("click", async () => {
   shareStatusEl.textContent = "無効化しています…";
   try {
-    const data = await shareAction(CONFIG.GAS_ENDPOINT, idToken, "revoke_share");
+    const data = await shareActionWithSession(CONFIG.GAS_ENDPOINT, sessionToken, "revoke_share");
     if (data.ok) {
       shareIssuedEl.hidden = true;
       shareIssueRowEl.hidden = false;
@@ -246,15 +299,13 @@ window.addEventListener("load", () => {
     enterShareMode(tokenFromHash);
     return;
   }
-  google.accounts.id.initialize({
-    client_id: CONFIG.GOOGLE_CLIENT_ID,
-    callback: onCredential,
-  });
-  google.accounts.id.renderButton(document.getElementById("signin"), {
-    theme: "outline",
-    size: "large",
-    text: "signin_with",
-  });
+  const savedSession = loadSavedSessionToken();
+  if (savedSession) {
+    sessionToken = savedSession;
+    showComposer(loadSavedSessionEmail());
+    return;
+  }
+  initGoogleSignIn();
 });
 
 function showError(message) {
@@ -370,7 +421,7 @@ function renderComment(view) {
 
   replyText.addEventListener("input", () => {
     countValue.textContent = countText(replyText.value);
-    replyBtn.disabled = !canReply(idToken || shareToken, replyText.value);
+    replyBtn.disabled = !canReply(sessionToken || shareToken, replyText.value);
   });
 
   replyBtn.addEventListener("click", async () => {
@@ -380,7 +431,7 @@ function renderComment(view) {
     try {
       const data = shareToken
         ? await replyCommentWithShare(CONFIG.GAS_ENDPOINT, shareToken, view.commentId, replyText.value, { asQuote })
-        : await replyComment(CONFIG.GAS_ENDPOINT, idToken, view.commentId, replyText.value, { asQuote });
+        : await replyCommentWithSession(CONFIG.GAS_ENDPOINT, sessionToken, view.commentId, replyText.value, { asQuote });
       if (data.ok) {
         replyStatus.innerHTML = "";
         if (data.dry_run) {
@@ -431,7 +482,7 @@ function renderComment(view) {
 }
 
 async function loadComments() {
-  if (!(idToken || shareToken)) {
+  if (!(sessionToken || shareToken)) {
     return;
   }
   inboxRefreshBtn.disabled = true;
@@ -439,7 +490,7 @@ async function loadComments() {
   try {
     const data = shareToken
       ? await listCommentsWithShare(CONFIG.GAS_ENDPOINT, shareToken)
-      : await listComments(CONFIG.GAS_ENDPOINT, idToken);
+      : await listCommentsWithSession(CONFIG.GAS_ENDPOINT, sessionToken);
     if (data.ok) {
       inboxStatusEl.textContent = "";
       const notes = inboxNotes(data);
@@ -453,6 +504,8 @@ async function loadComments() {
       inboxEmptyEl.hidden = views.length !== 0 || Boolean(data.dry_run);
     } else if (shareToken && data.error === "unauthorized") {
       showShareExpired();
+    } else if (sessionToken && data.error === "unauthorized") {
+      expireSession();
     } else {
       showInboxError("取得に失敗しました：" + data.error);
     }
@@ -549,7 +602,7 @@ function renderDmThread(view) {
 
   replyText.addEventListener("input", () => {
     countValue.textContent = countDmText(replyText.value);
-    replyBtn.disabled = !canReplyDm(idToken || shareToken, replyText.value);
+    replyBtn.disabled = !canReplyDm(sessionToken || shareToken, replyText.value);
   });
 
   replyBtn.addEventListener("click", async () => {
@@ -558,7 +611,7 @@ function renderDmThread(view) {
     try {
       const data = shareToken
         ? await replyDmWithShare(CONFIG.GAS_ENDPOINT, shareToken, view.conversationId, replyText.value)
-        : await replyDm(CONFIG.GAS_ENDPOINT, idToken, view.conversationId, replyText.value);
+        : await replyDmWithSession(CONFIG.GAS_ENDPOINT, sessionToken, view.conversationId, replyText.value);
       if (data.ok) {
         replyText.value = "";
         countValue.textContent = "0";
@@ -611,7 +664,7 @@ async function markDmConversationRead(view) {
   try {
     const data = shareToken
       ? await markDmReadWithShare(CONFIG.GAS_ENDPOINT, shareToken, view.conversationId, view.latestEventId)
-      : await markDmRead(CONFIG.GAS_ENDPOINT, idToken, view.conversationId, view.latestEventId);
+      : await markDmReadWithSession(CONFIG.GAS_ENDPOINT, sessionToken, view.conversationId, view.latestEventId);
     if (!data.ok && shareToken && data.error === "unauthorized") {
       showShareExpired();
     }
@@ -683,7 +736,7 @@ function renderDmList() {
 }
 
 async function loadDms() {
-  if (!(idToken || shareToken)) {
+  if (!(sessionToken || shareToken)) {
     return;
   }
   dmRefreshBtn.disabled = true;
@@ -691,7 +744,7 @@ async function loadDms() {
   try {
     const data = shareToken
       ? await listDmsWithShare(CONFIG.GAS_ENDPOINT, shareToken)
-      : await listDms(CONFIG.GAS_ENDPOINT, idToken);
+      : await listDmsWithSession(CONFIG.GAS_ENDPOINT, sessionToken);
     if (data.ok) {
       dmStatusEl.textContent = "";
       dmDryRun = Boolean(data.dry_run);
@@ -702,6 +755,8 @@ async function loadDms() {
       renderDmList();
     } else if (shareToken && data.error === "unauthorized") {
       showShareExpired();
+    } else if (sessionToken && data.error === "unauthorized") {
+      expireSession();
     } else {
       showDmError("取得に失敗しました：" + data.error);
     }
@@ -720,7 +775,7 @@ postBtn.addEventListener("click", async () => {
   try {
     const data = shareToken
       ? await postTweetWithShare(CONFIG.GAS_ENDPOINT, shareToken, textEl.value)
-      : await postTweet(CONFIG.GAS_ENDPOINT, idToken, textEl.value);
+      : await postTweetWithSession(CONFIG.GAS_ENDPOINT, sessionToken, textEl.value);
     if (data.ok) {
       statusEl.innerHTML = "";
       const a = document.createElement("a");

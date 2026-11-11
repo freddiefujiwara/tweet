@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   postTweet,
+  postTweetWithSession,
   postTweetWithShare,
+  exchangeSession,
+  revokeSession,
+  shareActionWithSession,
   validateShareToken,
   shareAction,
   listComments,
@@ -19,6 +23,43 @@ import {
 function stubFetch(json) {
   return vi.fn(async () => ({ json: async () => json }));
 }
+
+describe("owner session calls", () => {
+  it("exchangeSession sends the id token to the exchange action", async () => {
+    const fetchImpl = stubFetch({ ok: true, session_token: "sess" });
+    const data = await exchangeSession("https://example.com/exec", "tok", fetchImpl);
+    expect(data.session_token).toBe("sess");
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({ idToken: "tok", action: "exchange_session" });
+  });
+
+  it("revokeSession sends the session token to the revoke action", async () => {
+    const fetchImpl = stubFetch({ ok: true, revoked: true });
+    await revokeSession("https://example.com/exec", "sess", fetchImpl);
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      session_token: "sess",
+      action: "revoke_session",
+    });
+  });
+
+  it("postTweetWithSession posts session_token and text", async () => {
+    const fetchImpl = stubFetch({ ok: true });
+    await postTweetWithSession("https://example.com/exec", "sess", "本文", fetchImpl);
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({ session_token: "sess", text: "本文" });
+  });
+
+  it("shareActionWithSession sends the session token", async () => {
+    const fetchImpl = stubFetch({ ok: true });
+    await shareActionWithSession("https://example.com/exec", "sess", "issue_share", fetchImpl);
+    const [, options] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      session_token: "sess",
+      action: "issue_share",
+    });
+  });
+});
 
 describe("postTweet", () => {
   it("posts idToken and text as JSON with a text/plain content type", async () => {

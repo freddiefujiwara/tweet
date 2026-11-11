@@ -46,6 +46,13 @@ describe("buildListCommentsPayload", () => {
       action: "list_comments",
     });
   });
+
+  it("builds a session_token payload for the owner session", () => {
+    expect(buildListCommentsPayload({ sessionToken: "sess" })).toEqual({
+      session_token: "sess",
+      action: "list_comments",
+    });
+  });
 });
 
 describe("buildReplyCommentPayload", () => {
