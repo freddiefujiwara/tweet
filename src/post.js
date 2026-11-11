@@ -26,6 +26,23 @@ export async function postTweet(endpoint, idToken, text, fetchImpl = fetch) {
   return sendJson(endpoint, { idToken, text }, fetchImpl);
 }
 
+// Post with the owner's 30-day session token (the post-sign-in
+// steady state; exchanged from the ID token at sign-in).
+export async function postTweetWithSession(endpoint, sessionToken, text, fetchImpl = fetch) {
+  return sendJson(endpoint, { session_token: sessionToken, text }, fetchImpl);
+}
+
+// Exchange a fresh Google ID token for a 30-day owner session:
+// resolves to { ok: true, session_token, expires_at, ... }.
+export async function exchangeSession(endpoint, idToken, fetchImpl = fetch) {
+  return sendJson(endpoint, { idToken, action: "exchange_session" }, fetchImpl);
+}
+
+// Revoke the owner session (logout). Best effort by design.
+export async function revokeSession(endpoint, sessionToken, fetchImpl = fetch) {
+  return sendJson(endpoint, { session_token: sessionToken, action: "revoke_session" }, fetchImpl);
+}
+
 // Post with a share link token instead of signing in. A share link is
 // owner-equivalent: the post is made as the owner.
 export async function postTweetWithShare(endpoint, shareToken, text, fetchImpl = fetch) {
@@ -39,9 +56,13 @@ export async function validateShareToken(endpoint, shareToken, fetchImpl = fetch
 }
 
 // Owner-only share administration: action is "issue_share" or
-// "revoke_share"; requires the owner's Google ID token.
+// "revoke_share"; requires owner proof (ID token, or the session).
 export async function shareAction(endpoint, idToken, action, fetchImpl = fetch) {
   return sendJson(endpoint, { idToken, action }, fetchImpl);
+}
+
+export async function shareActionWithSession(endpoint, sessionToken, action, fetchImpl = fetch) {
+  return sendJson(endpoint, { session_token: sessionToken, action }, fetchImpl);
 }
 
 // Comment inbox: list comments on our tweets. Same endpoint and auth
@@ -58,6 +79,14 @@ export async function listCommentsWithShare(endpoint, shareToken, fetchImpl = fe
   return sendJson(
     endpoint,
     buildListCommentsPayload({ shareToken }),
+    fetchImpl,
+  );
+}
+
+export async function listCommentsWithSession(endpoint, sessionToken, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildListCommentsPayload({ sessionToken }),
     fetchImpl,
   );
 }
@@ -101,6 +130,15 @@ export async function replyCommentWithShare(endpoint, shareToken, commentId, tex
   );
 }
 
+export async function replyCommentWithSession(endpoint, sessionToken, commentId, text, options, fetchImpl) {
+  const resolved = resolveReplyArgs(options, fetchImpl);
+  return sendJson(
+    endpoint,
+    buildReplyCommentPayload({ sessionToken }, commentId, text, resolved.options),
+    resolved.fetchImpl,
+  );
+}
+
 // DM inbox: list DM conversations. Same endpoint and auth as
 // posting; the action field selects the operation server-side.
 export async function listDms(endpoint, idToken, fetchImpl = fetch) {
@@ -115,6 +153,14 @@ export async function listDmsWithShare(endpoint, shareToken, fetchImpl = fetch) 
   return sendJson(
     endpoint,
     buildListDmsPayload({ shareToken }),
+    fetchImpl,
+  );
+}
+
+export async function listDmsWithSession(endpoint, sessionToken, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildListDmsPayload({ sessionToken }),
     fetchImpl,
   );
 }
@@ -136,6 +182,14 @@ export async function markDmReadWithShare(endpoint, shareToken, conversationId, 
   );
 }
 
+export async function markDmReadWithSession(endpoint, sessionToken, conversationId, eventId, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildMarkDmReadPayload({ sessionToken }, conversationId, eventId),
+    fetchImpl,
+  );
+}
+
 // Reply inside one DM conversation. The success response carries
 // conversation_id and event_id; in DRY_RUN it also carries
 // dry_run: true.
@@ -151,6 +205,14 @@ export async function replyDmWithShare(endpoint, shareToken, conversationId, tex
   return sendJson(
     endpoint,
     buildReplyDmPayload({ shareToken }, conversationId, text),
+    fetchImpl,
+  );
+}
+
+export async function replyDmWithSession(endpoint, sessionToken, conversationId, text, fetchImpl = fetch) {
+  return sendJson(
+    endpoint,
+    buildReplyDmPayload({ sessionToken }, conversationId, text),
     fetchImpl,
   );
 }

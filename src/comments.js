@@ -8,13 +8,18 @@ import { countText, MAX_LENGTH } from "./composer.js";
 export const DRY_RUN_NOTE = "ステージングではコメントを取得しません";
 
 // --- Request payloads ---
-// Auth follows the existing post pattern: the owner's Google ID token
-// as { idToken }, or a temporary access link as { share_token }.
+// Auth follows the existing post pattern: the owner's 30-day session
+// token as { session_token }, a temporary access link as
+// { share_token }, or (only for the sign-in exchange itself) the
+// Google ID token as { idToken }.
 // A share token, when present, takes precedence (same as posting).
 
 export function buildListCommentsPayload(auth) {
   if (auth?.shareToken) {
     return { share_token: auth.shareToken, action: "list_comments" };
+  }
+  if (auth?.sessionToken) {
+    return { session_token: auth.sessionToken, action: "list_comments" };
   }
   return { idToken: auth?.idToken ?? null, action: "list_comments" };
 }
@@ -40,6 +45,15 @@ export function buildReplyCommentPayload(auth, commentId, text, options) {
   if (auth?.shareToken) {
     return {
       share_token: auth.shareToken,
+      action: "reply_comment",
+      comment_id: commentId,
+      text,
+      ...extra,
+    };
+  }
+  if (auth?.sessionToken) {
+    return {
+      session_token: auth.sessionToken,
       action: "reply_comment",
       comment_id: commentId,
       text,
