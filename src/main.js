@@ -49,6 +49,7 @@ if (isStagingBuild()) {
   showStagingBanner();
 }
 
+const loadingEl = document.getElementById("boot-loading");
 const gateEl = document.getElementById("gate");
 const gateErrorEl = document.getElementById("gate-error");
 const composerEl = document.getElementById("composer");
@@ -107,7 +108,14 @@ function refreshState() {
 
 textEl.addEventListener("input", refreshState);
 
+// Boot starts on the loading screen, not the sign-in gate: while
+// the saved session is being restored, showing the Google button
+// would read as "not signed in yet". The gate appears only once
+// sign-in is truly required — every transition below therefore
+// hides the loading screen and lands on exactly one of
+// gate / expired / composer.
 function showComposer(email) {
+  loadingEl.hidden = true;
   gateEl.hidden = true;
   expiredEl.hidden = true;
   composerEl.hidden = false;
@@ -115,13 +123,14 @@ function showComposer(email) {
   inboxEl.hidden = false;
   dmEl.hidden = false;
   logoutBtn.hidden = false;
-  accountEl.textContent = email ? "ログイン中：" + email : "ログイン中";
+  accountEl.textContent = email ? `${email} でログイン中` : "";
   refreshState();
   loadComments();
   loadDms();
 }
 
 function showGate() {
+  loadingEl.hidden = true;
   gateEl.hidden = false;
   composerEl.hidden = true;
   shareCardEl.hidden = true;
@@ -132,6 +141,7 @@ function showGate() {
 }
 
 function showShareComposer() {
+  loadingEl.hidden = true;
   gateEl.hidden = true;
   expiredEl.hidden = true;
   composerEl.hidden = false;
@@ -148,6 +158,7 @@ function showShareComposer() {
 function showShareExpired() {
   shareToken = null;
   shareExpiresAt = null;
+  loadingEl.hidden = true;
   gateEl.hidden = true;
   composerEl.hidden = true;
   shareCardEl.hidden = true;
@@ -192,27 +203,56 @@ logoutBtn.addEventListener("click", () => {
   if (window.google) {
     google.accounts.id.disableAutoSelect();
   }
+  gateErrorEl.textContent = "";
   showGate();
 });
+
+// Shown on the gate when a saved owner session turned out to be
+// dead and the visitor is asked to sign in again.
+const SESSION_EXPIRED_TEXT =
+  "ログインの有効期限が切れました。再度ログインしてください。";
 
 // The saved owner session turned out to be dead (expired or
 // revoked): drop it and return to the sign-in gate.
 function expireSession() {
   sessionToken = null;
   clearSavedSession();
+  gateErrorEl.textContent = SESSION_EXPIRED_TEXT;
   showGate();
   initGoogleSignIn();
 }
 
+// The GIS client script arrives async; poll for it briefly. If
+// it never shows up — an ad blocker can swallow it — the gate
+// says so after a few seconds instead of leaving the sign-in
+// area silently empty forever.
+const SIGNIN_SCRIPT_ERROR_TEXT =
+  "Googleログインスクリプトの読み込みに失敗しました。広告ブロック等を解除して再読み込みしてください。";
+let signInScriptWaitMs = 0;
+
 function initGoogleSignIn() {
-  google.accounts.id.initialize({
+  if (!window.google || !window.google.accounts) {
+    if (signInScriptWaitMs >= 3000) {
+      gateErrorEl.textContent = SIGNIN_SCRIPT_ERROR_TEXT;
+      return;
+    }
+    signInScriptWaitMs += 300;
+    setTimeout(initGoogleSignIn, 300);
+    return;
+  }
+  signInScriptWaitMs = 0;
+  if (gateErrorEl.textContent === SIGNIN_SCRIPT_ERROR_TEXT) {
+    gateErrorEl.textContent = "";
+  }
+  window.google.accounts.id.initialize({
     client_id: CONFIG.GOOGLE_CLIENT_ID,
     callback: onCredential,
   });
-  google.accounts.id.renderButton(document.getElementById("signin"), {
+  window.google.accounts.id.renderButton(document.getElementById("signin"), {
     theme: "outline",
     size: "large",
     text: "signin_with",
+    shape: "pill",
   });
 }
 
@@ -305,6 +345,7 @@ window.addEventListener("load", () => {
     showComposer(loadSavedSessionEmail());
     return;
   }
+  showGate();
   initGoogleSignIn();
 });
 
