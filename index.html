@@ -19,8 +19,8 @@
     <link rel="icon"
   href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23000'/%3E%3Ctext x='32' y='42' font-size='34' text-anchor='middle' fill='white' font-family='system-ui'%3EF%3C/text%3E%3C/svg%3E" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script type="module" crossorigin src="/tweet/assets/index-HzR0PxuD.js"></script>
-    <link rel="stylesheet" crossorigin href="/tweet/assets/index-DZsi8dG7.css">
+    <script type="module" crossorigin src="/tweet/assets/index-C3vIhx5D.js"></script>
+    <link rel="stylesheet" crossorigin href="/tweet/assets/index-uwQh912g.css">
   </head>
   <body>
     <div class="layout">
@@ -34,7 +34,11 @@
         </div>
       </header>
       <main>
-        <section id="gate" class="table-wrap auth-gate">
+        <section id="boot-loading" class="table-wrap auth-gate" aria-busy="true">
+          <div class="spinner" aria-hidden="true"></div>
+          <p class="meta">読み込んでいます…</p>
+        </section>
+        <section id="gate" class="table-wrap auth-gate" hidden>
           <h2 class="section-title">Googleログインが必要です</h2>
           <p class="meta">許可されたアカウントでサインインしてください。</p>
           <div id="signin" class="google-login-button"></div>
