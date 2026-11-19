@@ -349,23 +349,60 @@ window.addEventListener("load", () => {
   initGoogleSignIn();
 });
 
-function showError(message) {
-  statusEl.innerHTML = "";
+// Replace an element's content with a single error message.
+function showErrorIn(el, message) {
+  el.innerHTML = "";
   const span = document.createElement("span");
   span.className = "error";
   span.textContent = message;
-  statusEl.append(span);
+  el.append(span);
+}
+
+function showError(message) {
+  showErrorIn(statusEl, message);
   postBtn.disabled = false;
 }
 
 // --- Comment inbox ---
 
 function showInboxError(message) {
-  inboxStatusEl.innerHTML = "";
-  const span = document.createElement("span");
-  span.className = "error";
-  span.textContent = message;
-  inboxStatusEl.append(span);
+  showErrorIn(inboxStatusEl, message);
+}
+
+// Show a failed reply/send in its status area and re-enable the
+// button so the user can retry.
+function showReplyError(replyStatus, replyBtn, message) {
+  showErrorIn(replyStatus, message);
+  replyBtn.disabled = false;
+}
+
+// A link that opens in a new tab (comment links, posted URLs).
+function externalLink(url, text = url) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.textContent = text;
+  a.target = "_blank";
+  a.rel = "noopener";
+  return a;
+}
+
+// The counter + button row under a reply box; the two inboxes
+// differ only in the counter's limit label and the button label.
+function buildReplyRow(countLabel, buttonLabel) {
+  const row = document.createElement("div");
+  row.className = "composer-row";
+  const count = document.createElement("span");
+  count.className = "meta";
+  const countValue = document.createElement("span");
+  countValue.textContent = "0";
+  count.append(countValue, countLabel);
+  const replyBtn = document.createElement("button");
+  replyBtn.type = "button";
+  replyBtn.className = "post-button";
+  replyBtn.textContent = buttonLabel;
+  replyBtn.disabled = true;
+  row.append(count, replyBtn);
+  return { row, countValue, replyBtn };
 }
 
 function renderComment(view) {
@@ -400,23 +437,13 @@ function renderComment(view) {
   const links = document.createElement("p");
   links.className = "comment-links meta";
   if (view.commentUrl) {
-    const a = document.createElement("a");
-    a.href = view.commentUrl;
-    a.textContent = "コメントを見る";
-    a.target = "_blank";
-    a.rel = "noopener";
-    links.append(a);
+    links.append(externalLink(view.commentUrl, "コメントを見る"));
   }
   if (view.parentUrl) {
     if (links.childNodes.length > 0) {
       links.append(" ／ ");
     }
-    const a = document.createElement("a");
-    a.href = view.parentUrl;
-    a.textContent = "返信先の投稿を見る";
-    a.target = "_blank";
-    a.rel = "noopener";
-    links.append(a);
+    links.append(externalLink(view.parentUrl, "返信先の投稿を見る"));
   }
   if (links.childNodes.length > 0) {
     article.append(links);
@@ -439,19 +466,7 @@ function renderComment(view) {
   quoteCheckbox.setAttribute("aria-label", "引用リポストで返す");
   quoteToggle.append(quoteCheckbox, "引用リポストで返す");
 
-  const row = document.createElement("div");
-  row.className = "composer-row";
-  const count = document.createElement("span");
-  count.className = "meta";
-  const countValue = document.createElement("span");
-  countValue.textContent = "0";
-  count.append(countValue, " / 280");
-  const replyBtn = document.createElement("button");
-  replyBtn.type = "button";
-  replyBtn.className = "post-button";
-  replyBtn.textContent = "返信する";
-  replyBtn.disabled = true;
-  row.append(count, replyBtn);
+  const { row, countValue, replyBtn } = buildReplyRow(" / 280", "返信する");
 
   quoteCheckbox.addEventListener("change", () => {
     replyBtn.textContent = quoteCheckbox.checked ? "引用で返す" : "返信する";
@@ -480,11 +495,7 @@ function renderComment(view) {
             ? "ステージングでは引用リポストしません（ドライラン）。"
             : "ステージングでは返信しません（ドライラン）。";
         } else if (data.url) {
-          const a = document.createElement("a");
-          a.href = data.url;
-          a.textContent = data.url;
-          a.target = "_blank";
-          a.rel = "noopener";
+          const a = externalLink(data.url);
           replyStatus.append(asQuote ? "引用リポストしました：\n" : "返信しました：\n", a);
           if (data.verifiedText != null) {
             replyStatus.append("\n確認済みの本文：" + data.verifiedText);
@@ -501,20 +512,10 @@ function renderComment(view) {
       } else if (shareToken && data.error === "unauthorized") {
         showShareExpired();
       } else {
-        const span = document.createElement("span");
-        span.className = "error";
-        span.textContent = "失敗しました：" + data.error;
-        replyStatus.innerHTML = "";
-        replyStatus.append(span);
-        replyBtn.disabled = false;
+        showReplyError(replyStatus, replyBtn, "失敗しました：" + data.error);
       }
     } catch (err) {
-      const span = document.createElement("span");
-      span.className = "error";
-      span.textContent = "通信に失敗しました：" + err;
-      replyStatus.innerHTML = "";
-      replyStatus.append(span);
-      replyBtn.disabled = false;
+      showReplyError(replyStatus, replyBtn, "通信に失敗しました：" + err);
     }
   });
 
@@ -578,11 +579,7 @@ const dmMarkRequested = new Set();
 let dmThreadNotice = null;
 
 function showDmError(message) {
-  dmStatusEl.innerHTML = "";
-  const span = document.createElement("span");
-  span.className = "error";
-  span.textContent = message;
-  dmStatusEl.append(span);
+  showErrorIn(dmStatusEl, message);
 }
 
 function renderDmThread(view) {
@@ -620,19 +617,10 @@ function renderDmThread(view) {
   replyText.placeholder = "返信する文面";
   replyText.setAttribute("aria-label", "DMに返信する文面");
 
-  const row = document.createElement("div");
-  row.className = "composer-row";
-  const count = document.createElement("span");
-  count.className = "meta";
-  const countValue = document.createElement("span");
-  countValue.textContent = "0";
-  count.append(countValue, ` / ${DM_MAX_LENGTH}`);
-  const replyBtn = document.createElement("button");
-  replyBtn.type = "button";
-  replyBtn.className = "post-button";
-  replyBtn.textContent = "送信する";
-  replyBtn.disabled = true;
-  row.append(count, replyBtn);
+  const { row, countValue, replyBtn } = buildReplyRow(
+    ` / ${DM_MAX_LENGTH}`,
+    "送信する",
+  );
 
   const replyStatus = document.createElement("div");
   replyStatus.className = "comment-reply-status";
@@ -668,20 +656,10 @@ function renderDmThread(view) {
       } else if (shareToken && data.error === "unauthorized") {
         showShareExpired();
       } else {
-        const span = document.createElement("span");
-        span.className = "error";
-        span.textContent = "失敗しました：" + data.error;
-        replyStatus.innerHTML = "";
-        replyStatus.append(span);
-        replyBtn.disabled = false;
+        showReplyError(replyStatus, replyBtn, "失敗しました：" + data.error);
       }
     } catch (err) {
-      const span = document.createElement("span");
-      span.className = "error";
-      span.textContent = "通信に失敗しました：" + err;
-      replyStatus.innerHTML = "";
-      replyStatus.append(span);
-      replyBtn.disabled = false;
+      showReplyError(replyStatus, replyBtn, "通信に失敗しました：" + err);
     }
   });
 
@@ -819,11 +797,7 @@ postBtn.addEventListener("click", async () => {
       : await postTweetWithSession(CONFIG.GAS_ENDPOINT, sessionToken, textEl.value);
     if (data.ok) {
       statusEl.innerHTML = "";
-      const a = document.createElement("a");
-      a.href = data.url;
-      a.textContent = data.url;
-      a.target = "_blank";
-      a.rel = "noopener";
+      const a = externalLink(data.url);
       statusEl.append(
         "投稿しました：\n",
         a,
