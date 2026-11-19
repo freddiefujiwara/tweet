@@ -1,7 +1,11 @@
 // Pure helpers for the DM inbox: request payload building and
 // display-data conversion. DOM rendering lives in main.js; keeping
 // this logic separate makes it unit-testable without a document.
-import { formatCommentTime } from "./comments.js";
+import {
+  authFields,
+  formatCommentTime,
+  responseNotes,
+} from "./comments.js";
 
 export { formatCommentTime };
 
@@ -25,34 +29,12 @@ export const DM_PREVIEW_LENGTH = 80;
 // A share token, when present, takes precedence (same as posting).
 
 export function buildListDmsPayload(auth) {
-  if (auth?.shareToken) {
-    return { share_token: auth.shareToken, action: "list_dms" };
-  }
-  if (auth?.sessionToken) {
-    return { session_token: auth.sessionToken, action: "list_dms" };
-  }
-  return { idToken: auth?.idToken ?? null, action: "list_dms" };
+  return { ...authFields(auth), action: "list_dms" };
 }
 
 export function buildMarkDmReadPayload(auth, conversationId, eventId) {
-  if (auth?.shareToken) {
-    return {
-      share_token: auth.shareToken,
-      action: "mark_dm_read",
-      conversation_id: conversationId,
-      event_id: eventId,
-    };
-  }
-  if (auth?.sessionToken) {
-    return {
-      session_token: auth.sessionToken,
-      action: "mark_dm_read",
-      conversation_id: conversationId,
-      event_id: eventId,
-    };
-  }
   return {
-    idToken: auth?.idToken ?? null,
+    ...authFields(auth),
     action: "mark_dm_read",
     conversation_id: conversationId,
     event_id: eventId,
@@ -60,24 +42,8 @@ export function buildMarkDmReadPayload(auth, conversationId, eventId) {
 }
 
 export function buildReplyDmPayload(auth, conversationId, text) {
-  if (auth?.shareToken) {
-    return {
-      share_token: auth.shareToken,
-      action: "reply_dm",
-      conversation_id: conversationId,
-      text,
-    };
-  }
-  if (auth?.sessionToken) {
-    return {
-      session_token: auth.sessionToken,
-      action: "reply_dm",
-      conversation_id: conversationId,
-      text,
-    };
-  }
   return {
-    idToken: auth?.idToken ?? null,
+    ...authFields(auth),
     action: "reply_dm",
     conversation_id: conversationId,
     text,
@@ -222,19 +188,9 @@ export function normalizeConversations(conversations) {
 
 // --- Response notes ---
 
-/**
- * Notes to show above the list: the staging note when the response
- * is a dry run, plus the backend's own note when one is present.
- */
+/** Notes to show above the list (see responseNotes in comments.js). */
 export function dmNotes(data) {
-  const notes = [];
-  if (data?.dry_run) {
-    notes.push(DM_DRY_RUN_NOTE);
-  }
-  if (typeof data?.note === "string" && data.note) {
-    notes.push(data.note);
-  }
-  return notes;
+  return responseNotes(data, DM_DRY_RUN_NOTE);
 }
 
 // --- Reply validation (code point count, 10,000 limit) ---

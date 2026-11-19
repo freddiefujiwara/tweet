@@ -14,14 +14,19 @@ export const DRY_RUN_NOTE = "ステージングではコメントを取得しま
 // Google ID token as { idToken }.
 // A share token, when present, takes precedence (same as posting).
 
-export function buildListCommentsPayload(auth) {
+/** The auth field every payload carries; shared with dms.js. */
+export function authFields(auth) {
   if (auth?.shareToken) {
-    return { share_token: auth.shareToken, action: "list_comments" };
+    return { share_token: auth.shareToken };
   }
   if (auth?.sessionToken) {
-    return { session_token: auth.sessionToken, action: "list_comments" };
+    return { session_token: auth.sessionToken };
   }
-  return { idToken: auth?.idToken ?? null, action: "list_comments" };
+  return { idToken: auth?.idToken ?? null };
+}
+
+export function buildListCommentsPayload(auth) {
+  return { ...authFields(auth), action: "list_comments" };
 }
 
 /**
@@ -40,28 +45,9 @@ export function isQuoteReply(options) {
 }
 
 export function buildReplyCommentPayload(auth, commentId, text, options) {
-  const asQuote = isQuoteReply(options);
-  const extra = asQuote ? { as_quote: true } : {};
-  if (auth?.shareToken) {
-    return {
-      share_token: auth.shareToken,
-      action: "reply_comment",
-      comment_id: commentId,
-      text,
-      ...extra,
-    };
-  }
-  if (auth?.sessionToken) {
-    return {
-      session_token: auth.sessionToken,
-      action: "reply_comment",
-      comment_id: commentId,
-      text,
-      ...extra,
-    };
-  }
+  const extra = isQuoteReply(options) ? { as_quote: true } : {};
   return {
-    idToken: auth?.idToken ?? null,
+    ...authFields(auth),
     action: "reply_comment",
     comment_id: commentId,
     text,
@@ -187,18 +173,23 @@ export function normalizeComments(comments) {
 // --- Response notes ---
 
 /**
- * Notes to show above the list: the staging note when the response
+ * Notes to show above a list: the staging note when the response
  * is a dry run, plus the backend's own note when one is present.
+ * Shared with dms.js, which passes its own dry-run note.
  */
-export function inboxNotes(data) {
+export function responseNotes(data, dryRunNote) {
   const notes = [];
   if (data?.dry_run) {
-    notes.push(DRY_RUN_NOTE);
+    notes.push(dryRunNote);
   }
   if (typeof data?.note === "string" && data.note) {
     notes.push(data.note);
   }
   return notes;
+}
+
+export function inboxNotes(data) {
+  return responseNotes(data, DRY_RUN_NOTE);
 }
 
 // --- Reply validation (same counting rule as posting) ---
