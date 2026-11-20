@@ -3,7 +3,9 @@
 export const MAX_LENGTH = 280;
 
 export function countText(text) {
-  return [...text].length;
+  // A non-string (a deformed value where text was expected) counts
+  // as empty instead of throwing on the spread.
+  return [...(typeof text === "string" ? text : "")].length;
 }
 
 export function canPost(idToken, text) {

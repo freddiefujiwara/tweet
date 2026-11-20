@@ -7,6 +7,22 @@ import { countText, MAX_LENGTH } from "./composer.js";
 // or posts real comments).
 export const DRY_RUN_NOTE = "ステージングではコメントを取得しません";
 
+/**
+ * A text field from the API as a string: strings pass through,
+ * numbers stringify, and anything else (null, arrays, objects —
+ * including values whose toString is not a function, which throw on
+ * conversion) reads as empty. Shared with dms.js.
+ */
+export function asText(value) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  return "";
+}
+
 // --- Request payloads ---
 // Auth follows the existing post pattern: the owner's 30-day session
 // token as { session_token }, a temporary access link as
@@ -59,21 +75,24 @@ export function buildReplyCommentPayload(auth, commentId, text, options) {
 
 /** Canonical URL of the comment itself on X. */
 export function commentUrl(comment) {
-  if (!comment?.comment_id) {
+  const commentId = asText(comment?.comment_id);
+  if (!commentId) {
     return "";
   }
-  if (comment.author_username) {
-    return `https://x.com/${comment.author_username}/status/${comment.comment_id}`;
+  const username = asText(comment?.author_username);
+  if (username) {
+    return `https://x.com/${username}/status/${commentId}`;
   }
-  return `https://x.com/i/status/${comment.comment_id}`;
+  return `https://x.com/i/status/${commentId}`;
 }
 
 /** URL of our tweet the comment replied to, or "" when unknown. */
 export function parentTweetUrl(comment) {
-  if (!comment?.in_reply_to_tweet_id) {
+  const parentId = asText(comment?.in_reply_to_tweet_id);
+  if (!parentId) {
     return "";
   }
-  return `https://x.com/i/status/${comment.in_reply_to_tweet_id}`;
+  return `https://x.com/i/status/${parentId}`;
 }
 
 // --- Status badge ---
@@ -119,6 +138,9 @@ export function badgesFor(comment) {
 
 /** "2026/11/10 14:53" in local time; "" when the value is invalid. */
 export function formatCommentTime(value) {
+  if (typeof value !== "string" && typeof value !== "number") {
+    return "";
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return "";
@@ -133,14 +155,14 @@ export function formatCommentTime(value) {
 export function toCommentView(comment) {
   const badge = badgeFor(comment);
   const kindBadge = kindBadgeFor(comment);
-  const name = comment?.author_name || "";
-  const username = comment?.author_username || "";
+  const name = asText(comment?.author_name);
+  const username = asText(comment?.author_username);
   return {
     commentId: comment?.comment_id ?? "",
     authorName: name,
     authorUsername: username,
     authorLabel: username ? `${name}（@${username}）` : name,
-    text: comment?.text ?? "",
+    text: asText(comment?.text),
     createdAt: comment?.created_at ?? "",
     timeLabel: formatCommentTime(comment?.created_at),
     commentUrl: commentUrl(comment ?? {}),
@@ -165,8 +187,15 @@ export function normalizeComments(comments) {
   if (!Array.isArray(comments)) {
     return [];
   }
+  // Only string times parse; anything else is NaN, which the sort
+  // treats as "equal" — a deformed created_at must not throw inside
+  // Date.parse (it coerces its argument) and kill the whole inbox.
+  const timeOf = (comment) => {
+    const value = comment?.created_at;
+    return typeof value === "string" ? Date.parse(value) : NaN;
+  };
   return [...comments]
-    .sort((a, b) => Date.parse(b?.created_at) - Date.parse(a?.created_at))
+    .sort((a, b) => timeOf(b) - timeOf(a))
     .map(toCommentView);
 }
 

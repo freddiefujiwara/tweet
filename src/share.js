@@ -6,14 +6,23 @@
 
 /** Extract the share token from a location hash string, or return "". */
 export function parseShareToken(hash) {
-  if (!hash) {
+  if (typeof hash !== "string" || !hash) {
     return "";
   }
   const fragment = hash.startsWith("#") ? hash.slice(1) : hash;
   for (const part of fragment.split("&")) {
     const eq = part.indexOf("=");
     if (eq > 0 && part.slice(0, eq) === "share") {
-      return decodeURIComponent(part.slice(eq + 1));
+      try {
+        return decodeURIComponent(part.slice(eq + 1));
+      } catch {
+        // A malformed percent-encoding (a damaged or hand-edited
+        // link) reads as no token. This runs in the boot load
+        // handler, before any try/catch, so throwing here would
+        // wedge the whole app instead of falling back to the saved
+        // session or the sign-in gate.
+        return "";
+      }
     }
   }
   return "";
@@ -21,11 +30,22 @@ export function parseShareToken(hash) {
 
 /** Build the URL a recipient opens: the app base plus the share fragment. */
 export function buildShareUrl(baseUrl, token) {
+  if (typeof token !== "string" || !token) {
+    // An issue response without a usable token has no URL to show;
+    // interpolating it would print "#share=undefined".
+    return "";
+  }
   return `${baseUrl}#share=${encodeURIComponent(token)}`;
 }
 
 /** Whole seconds until the session expires; null when the date is invalid. */
 export function shareSecondsLeft(expiresAt, nowMs) {
+  if (typeof expiresAt !== "string" && typeof expiresAt !== "number") {
+    return null;
+  }
+  if (!Number.isFinite(nowMs)) {
+    return null;
+  }
   const expiresMs = Date.parse(expiresAt);
   if (Number.isNaN(expiresMs)) {
     return null;
@@ -35,6 +55,9 @@ export function shareSecondsLeft(expiresAt, nowMs) {
 
 /** Expiry label as "20261202 07:53" (local time); "" when invalid. */
 export function formatShareExpiry(expiresAt) {
+  if (typeof expiresAt !== "string" && typeof expiresAt !== "number") {
+    return "";
+  }
   const date = new Date(expiresAt);
   if (Number.isNaN(date.getTime())) {
     return "";
@@ -46,11 +69,14 @@ export function formatShareExpiry(expiresAt) {
 
 /** Human label such as "残り約30日" / "残り約30分" / "残り約1分未満" / "期限切れ". */
 export function formatShareRemaining(seconds) {
-  if (seconds === null) {
+  if (typeof seconds !== "number" || Number.isNaN(seconds)) {
     return "";
   }
   if (seconds <= 0) {
     return "期限切れ";
+  }
+  if (!Number.isFinite(seconds)) {
+    return "";
   }
   if (seconds < 60) {
     return "残り約1分未満";
