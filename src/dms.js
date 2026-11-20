@@ -2,6 +2,7 @@
 // display-data conversion. DOM rendering lives in main.js; keeping
 // this logic separate makes it unit-testable without a document.
 import {
+  asText,
   authFields,
   formatCommentTime,
   responseNotes,
@@ -54,8 +55,8 @@ export function buildReplyDmPayload(auth, conversationId, text) {
 
 /** One participant as "名前（@username）", degrading gracefully. */
 export function participantLabelFor(participant) {
-  const name = participant?.name || "";
-  const username = participant?.username || "";
+  const name = asText(participant?.name);
+  const username = asText(participant?.username);
   if (name && username) {
     return `${name}（@${username}）`;
   }
@@ -89,7 +90,7 @@ export function participantsLabel(participants) {
  * points.
  */
 export function previewText(text, maxLength = DM_PREVIEW_LENGTH) {
-  const flat = String(text ?? "").replace(/\s+/g, " ").trim();
+  const flat = asText(text).replace(/\s+/g, " ").trim();
   const chars = [...flat];
   if (chars.length <= maxLength) {
     return flat;
@@ -137,7 +138,7 @@ export function toMessageView(message) {
     senderUsername: message?.sender_username ?? "",
     senderName: message?.sender_name ?? "",
     senderLabel: senderLabelFor(message),
-    text: message?.text ?? "",
+    text: asText(message?.text),
     createdAt: message?.created_at ?? "",
     timeLabel: formatCommentTime(message?.created_at),
     isMine: Boolean(message?.is_mine),
@@ -177,12 +178,15 @@ export function normalizeConversations(conversations) {
   if (!Array.isArray(conversations)) {
     return [];
   }
+  // Same guard as normalizeComments: only string times parse, so a
+  // deformed created_at sorts as "equal" instead of throwing inside
+  // Date.parse and killing the whole inbox.
+  const timeOf = (conversation) => {
+    const value = conversation?.latest_event?.created_at;
+    return typeof value === "string" ? Date.parse(value) : NaN;
+  };
   return [...conversations]
-    .sort(
-      (a, b) =>
-        Date.parse(b?.latest_event?.created_at ?? "") -
-        Date.parse(a?.latest_event?.created_at ?? ""),
-    )
+    .sort((a, b) => timeOf(b) - timeOf(a))
     .map(toConversationView);
 }
 
@@ -196,7 +200,9 @@ export function dmNotes(data) {
 // --- Reply validation (code point count, 10,000 limit) ---
 
 export function countDmText(text) {
-  return [...(text ?? "")].length;
+  // Like countText: a non-string counts as empty instead of
+  // throwing on the spread.
+  return [...(typeof text === "string" ? text : "")].length;
 }
 
 export function canReplyDm(authenticated, text) {
