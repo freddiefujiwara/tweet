@@ -43,6 +43,12 @@ import {
   formatShareRemaining,
   formatShareExpiry,
 } from "./share.js";
+import {
+  MAX_MEDIA,
+  mediaFileError,
+  fileToMediaItem,
+  mediaPreviewUrl,
+} from "./media.js";
 import { isStagingBuild, showStagingBanner } from "./staging-banner.js";
 
 if (isStagingBuild()) {
@@ -57,6 +63,9 @@ const expiredEl = document.getElementById("share-expired");
 const textEl = document.getElementById("text");
 const postBtn = document.getElementById("post");
 const countEl = document.getElementById("count");
+const mediaInput = document.getElementById("media");
+const mediaNoteEl = document.getElementById("media-note");
+const mediaPreviewEl = document.getElementById("media-preview");
 const statusEl = document.getElementById("status");
 const accountEl = document.getElementById("account");
 const logoutBtn = document.getElementById("logout");
@@ -107,6 +116,60 @@ function refreshState() {
 }
 
 textEl.addEventListener("input", refreshState);
+
+// Images attached to the next post: [{ data, type, name }]. Sent
+// inline with the post request; cleared after a successful post.
+let attachedMedia = [];
+
+function renderMediaPreview() {
+  mediaPreviewEl.innerHTML = "";
+  attachedMedia.forEach((item, index) => {
+    const wrap = document.createElement("span");
+    wrap.className = "media-thumb";
+    const img = document.createElement("img");
+    img.src = mediaPreviewUrl(item);
+    img.alt = item.name || "";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "media-remove";
+    remove.textContent = "×";
+    remove.title = "添付を取り消す";
+    remove.addEventListener("click", () => {
+      attachedMedia.splice(index, 1);
+      renderMediaPreview();
+    });
+    wrap.append(img, remove);
+    mediaPreviewEl.append(wrap);
+  });
+  mediaNoteEl.textContent = attachedMedia.length
+    ? `${attachedMedia.length} / ${MAX_MEDIA} 枚`
+    : "";
+}
+
+mediaInput.addEventListener("change", async () => {
+  const files = [...(mediaInput.files || [])];
+  mediaInput.value = "";
+  let note = "";
+  for (const file of files) {
+    if (attachedMedia.length >= MAX_MEDIA) {
+      note = `画像は ${MAX_MEDIA} 枚までです`;
+      break;
+    }
+    const error = mediaFileError(file);
+    if (error) {
+      note = `${file.name}: ${error}`;
+      continue;
+    }
+    try {
+      const item = await fileToMediaItem(file);
+      attachedMedia.push({ ...item, name: file.name });
+    } catch (err) {
+      note = `${file.name}: 読み込めませんでした`;
+    }
+  }
+  renderMediaPreview();
+  if (note) mediaNoteEl.textContent = note;
+});
 
 // Boot starts on the loading screen, not the sign-in gate: while
 // the saved session is being restored, showing the Google button
@@ -792,9 +855,11 @@ postBtn.addEventListener("click", async () => {
   postBtn.disabled = true;
   statusEl.textContent = "投稿しています…";
   try {
+    const media = attachedMedia.map(({ data, type }) => ({ data, type }));
+    const options = media.length ? { media } : undefined;
     const data = shareToken
-      ? await postTweetWithShare(CONFIG.GAS_ENDPOINT, shareToken, textEl.value)
-      : await postTweetWithSession(CONFIG.GAS_ENDPOINT, sessionToken, textEl.value);
+      ? await postTweetWithShare(CONFIG.GAS_ENDPOINT, shareToken, textEl.value, options)
+      : await postTweetWithSession(CONFIG.GAS_ENDPOINT, sessionToken, textEl.value, options);
     if (data.ok) {
       statusEl.innerHTML = "";
       const a = externalLink(data.url);
@@ -807,6 +872,8 @@ postBtn.addEventListener("click", async () => {
             : "（投稿の確認リクエストは失敗しました。リンク先でご確認ください）"),
       );
       textEl.value = "";
+      attachedMedia = [];
+      renderMediaPreview();
       refreshState();
     } else if (shareToken && data.error === "unauthorized") {
       // The link expired or was revoked while composing.

@@ -22,9 +22,16 @@ async function sendJson(endpoint, payload, fetchImpl) {
 }
 
 // Post with the owner's 30-day session token (the post-sign-in
-// steady state; exchanged from the ID token at sign-in).
-export async function postTweetWithSession(endpoint, sessionToken, text, fetchImpl = fetch) {
-  return sendJson(endpoint, { session_token: sessionToken, text }, fetchImpl);
+// steady state; exchanged from the ID token at sign-in). The
+// optional options argument may carry { media: [{ data, type }] }
+// (base64 images, see media.js); fetchImpl may be passed directly
+// as the fourth argument instead, as before.
+export async function postTweetWithSession(endpoint, sessionToken, text, options, fetchImpl) {
+  const resolved = resolveReplyArgs(options, fetchImpl);
+  const payload = { session_token: sessionToken, text };
+  const media = resolved.options && resolved.options.media;
+  if (Array.isArray(media) && media.length) payload.media = media;
+  return sendJson(endpoint, payload, resolved.fetchImpl);
 }
 
 // Exchange a fresh Google ID token for a 30-day owner session:
@@ -39,9 +46,14 @@ export async function revokeSession(endpoint, sessionToken, fetchImpl = fetch) {
 }
 
 // Post with a share link token instead of signing in. A share link is
-// owner-equivalent: the post is made as the owner.
-export async function postTweetWithShare(endpoint, shareToken, text, fetchImpl = fetch) {
-  return sendJson(endpoint, { share_token: shareToken, text }, fetchImpl);
+// owner-equivalent: the post is made as the owner. Accepts the same
+// optional { media } options argument as postTweetWithSession.
+export async function postTweetWithShare(endpoint, shareToken, text, options, fetchImpl) {
+  const resolved = resolveReplyArgs(options, fetchImpl);
+  const payload = { share_token: shareToken, text };
+  const media = resolved.options && resolved.options.media;
+  if (Array.isArray(media) && media.length) payload.media = media;
+  return sendJson(endpoint, payload, resolved.fetchImpl);
 }
 
 // Check a share link before composing: resolves to { ok: true,

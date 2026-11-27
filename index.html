@@ -50,6 +50,12 @@
           <p id="account" class="meta"></p>
           <textarea id="text" rows="5" placeholder="投稿する文面"></textarea>
           <div class="composer-row">
+            <label class="media-attach" for="media">画像を添付</label>
+            <input id="media" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>
+            <span id="media-note" class="meta"></span>
+          </div>
+          <div id="media-preview" class="media-preview"></div>
+          <div class="composer-row">
             <span class="meta"><span id="count">0</span> / 280</span>
             <button id="post" class="post-button" type="button" disabled>投稿する</button>
           </div>

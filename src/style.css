@@ -195,6 +195,49 @@ textarea:disabled {
   margin-top: 12px;
 }
 
+.media-attach {
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  background: transparent;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.media-preview {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.media-thumb {
+  position: relative;
+  display: inline-block;
+}
+
+.media-thumb img {
+  height: 80px;
+  border-radius: 8px;
+  display: block;
+}
+
+.media-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  border: none;
+  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+}
+
 .share-url-row {
   display: flex;
   gap: 8px;
