@@ -19,8 +19,8 @@
     <link rel="icon"
   href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23000'/%3E%3Ctext x='32' y='42' font-size='34' text-anchor='middle' fill='white' font-family='system-ui'%3EF%3C/text%3E%3C/svg%3E" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script type="module" crossorigin src="/tweet/staging/assets/index-BJhKLYI0.js"></script>
-    <link rel="stylesheet" crossorigin href="/tweet/staging/assets/index-uwQh912g.css">
+    <script type="module" crossorigin src="/tweet/staging/assets/index-6dkWrRr6.js"></script>
+    <link rel="stylesheet" crossorigin href="/tweet/staging/assets/index-BFRj5Fm9.css">
   </head>
   <body>
     <div class="layout">
@@ -51,6 +51,12 @@
         <section id="composer" class="table-wrap" hidden>
           <p id="account" class="meta"></p>
           <textarea id="text" rows="5" placeholder="投稿する文面"></textarea>
+          <div class="composer-row">
+            <label class="media-attach" for="media">画像を添付</label>
+            <input id="media" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>
+            <span id="media-note" class="meta"></span>
+          </div>
+          <div id="media-preview" class="media-preview"></div>
           <div class="composer-row">
             <span class="meta"><span id="count">0</span> / 280</span>
             <button id="post" class="post-button" type="button" disabled>投稿する</button>
